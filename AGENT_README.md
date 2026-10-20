@@ -10,10 +10,8 @@ The human-facing overview is `PIC18F8621_decompiled/README.md`.
 The RE below is v3.47-era background. The **active work** is firmware patching on **v3.5.13** (the image on the
 unit) plus the **ESP Wi-Fi bridge**. Quick orientation:
 
-* **Git.** This tree is a git repo; remote `git@github.com:MichaelMIL/tami4-v6.git`, branch `main`. Commits are
-  authored `mmkingmil`. **Push is currently BLOCKED**: the authenticated account (`michaelmark-strikeco`) has only
-  *pull* on that repo. Latest local commit is ready to push once the owner grants write access (or the owning
-  account is authenticated). `secrets.ini`, `.vscode/`, `.pio/` are gitignored — never commit them.
+* **Git.** This tree is a git repo; remote `git@github.com:MichaelMIL/tami4-v6.git`, branch `main`, pushed
+  2026-10-20 over SSH with the `MichaelMil` key. `secrets.ini`, `.vscode/`, `.pio/` are gitignored — never commit them.
 
 * **v3.5.13 patch images** (in `v3.5.13/`, built from stock `PIC18F8621-3.5b.hex`; see `v3.5.13/README.md` §6):
   the deliverable is **`PIC18F8621-3.5.13-par-settext.hex`** = `par` (read/write any parameter) + bulk `par`
@@ -46,11 +44,10 @@ unit) plus the **ESP Wi-Fi bridge**. Quick orientation:
   That is why the ESP uppercases idle text before `settext`.
 
 ### Open items (current work)
-1. **Git push** — needs write access for `michaelmark-strikeco` on `MichaelMIL/tami4-v6` (or auth the owner).
-2. **Hardware-verify** the `par-settext` image on the unit: re-flash via PICkit, then check `par`/`par=i,v`,
+1. **Hardware-verify** the `par-settext` image on the unit: re-flash via PICkit, then check `par`/`par=i,v`,
    bulk `par`, the two-row idle text (`settext=GOOD|MORNING`), and the JUG WATER QTY menu edit. Nudge text
    position via `PAGE`/`XPOS` in `build_full.py` if needed.
-3. The older RE open items (below) still stand.
+2. The older RE open items (below) still stand.
 
 ---
 
