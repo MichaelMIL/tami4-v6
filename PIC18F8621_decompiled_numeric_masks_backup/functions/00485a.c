@@ -1,0 +1,63 @@
+// address 0x00485a
+
+byte FUN_CODE_00485a(void)
+
+{
+  byte bVar1;
+  
+  DAT_DATA_0024 = 0;
+  bVar1 = TRISB;
+  TRISB = bVar1 & 0xef;
+  bVar1 = PORTB;
+  PORTB = bVar1 & 0xef;
+  bVar1 = PORTB;
+  if ((bVar1 & 0x80) == 0) {
+    DAT_DATA_0024 = 2;
+  }
+  bVar1 = PORTB;
+  if ((bVar1 & 0x20) == 0) {
+    DAT_DATA_0024 = DAT_DATA_0024 | 1;
+  }
+  bVar1 = PORTB;
+  if ((bVar1 & 0x40) == 0) {
+    DAT_DATA_0024 = DAT_DATA_0024 | 4;
+  }
+  bVar1 = TRISB;
+  TRISB = bVar1 | 0x10;
+  bVar1 = PORTB;
+  PORTB = bVar1 | 0x10;
+  bVar1 = TRISE;
+  TRISE = bVar1 & 0xbf;
+  bVar1 = PORTE;
+  PORTE = bVar1 & 0xbf;
+  bVar1 = PORTB;
+  if ((bVar1 & 0x40) == 0) {
+    DAT_DATA_0024 = DAT_DATA_0024 | 0x40;
+  }
+  bVar1 = TRISE;
+  TRISE = bVar1 | 0x40;
+  bVar1 = PORTE;
+  PORTE = bVar1 | 0x40;
+  bVar1 = TRISE;
+  TRISE = bVar1 & 0x7f;
+  bVar1 = PORTE;
+  PORTE = bVar1 & 0x7f;
+  bVar1 = PORTB;
+  if ((bVar1 & 0x40) == 0) {
+    DAT_DATA_0024 = DAT_DATA_0024 | 0x20;
+  }
+  bVar1 = PORTB;
+  if ((bVar1 & 0x80) == 0) {
+    DAT_DATA_0024 = DAT_DATA_0024 | 8;
+  }
+  bVar1 = PORTB;
+  if ((bVar1 & 0x20) == 0) {
+    DAT_DATA_0024 = DAT_DATA_0024 | 0x10;
+  }
+  bVar1 = TRISE;
+  TRISE = bVar1 | 0x80;
+  bVar1 = PORTE;
+  PORTE = bVar1 | 0x80;
+  return DAT_DATA_0024;
+}
+

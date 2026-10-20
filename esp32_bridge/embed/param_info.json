@@ -1,0 +1,646 @@
+{
+ "_about": "Parameter and counter explanations for firmware T6 3.47V (and v3.5.13, see 'versions'), derived from the reverse-engineered code. '(inferred)' marks meanings not fully proven. Master copy; serial_gui.py and esp32_bridge read it.",
+ "units": {
+  "C": "°C",
+  "dC": "°C difference",
+  "10ms": "10 ms steps",
+  "100ms": "100 ms steps",
+  "s": "seconds",
+  "10s": "10 s steps",
+  "min": "minutes",
+  "10min": "10 min steps",
+  "h": "hours (inferred)",
+  "ml10": "10 ml steps (inferred)",
+  "ml100": "100 ml steps (inferred)",
+  "flow": "0.1 L/min (inferred)",
+  "flag": "0 = off, 1 = on",
+  "bits": "option bits",
+  "hour": "hour of day",
+  "minute": "minute",
+  "count": "count",
+  "raw": "raw value",
+  "days": "days"
+ },
+ "params": {
+  "FT": {
+   "group": "System",
+   "unit": "flag",
+   "desc": "First-time / factory flag. If non-zero at power-up, the usage counters are cleared and the heater power-up delay becomes 120 s instead of 30 s. Normally 0."
+  },
+  "TSENSORSRATE": {
+   "group": "System",
+   "unit": "10ms",
+   "desc": "How often the cooling, heating and UV control loops run (read the tank sensors and re-evaluate the thermostats)."
+  },
+  "TSLEEPCOLDCUTOUT": {
+   "group": "Cooling",
+   "unit": "C",
+   "desc": "Cold-tank cut-out temperature in sleep (energy-saving) mode: the compressor stops when a cold sensor reaches this. The user menu 'Cold water temp' writes it together with TNORMALCOLDCUTOUT."
+  },
+  "TNORMALCOLDCUTOUT": {
+   "group": "Cooling",
+   "unit": "C",
+   "desc": "Cold-water set point (normal mode). The compressor stops when a cold sensor is at or below this, and restarts when the top sensor rises TTOPDELTACOLD above it or the bottom sensor rises TBOTTOMDELTACOLD above it. Independently, the compressor always stops at 1 °C (anti-freeze). Set from the user menu 'Cold water temp'."
+  },
+  "TTOPDELTACOLD": {
+   "group": "Cooling",
+   "unit": "dC",
+   "desc": "Restart hysteresis for the top cold sensor: the compressor starts again when it reads cut-out + this."
+  },
+  "TBOTTOMDELTACOLD": {
+   "group": "Cooling",
+   "unit": "dC",
+   "desc": "Restart hysteresis for the bottom cold sensor: the compressor starts again when it reads cut-out + this."
+  },
+  "TMAXCOLDDIFF": {
+   "group": "Cooling",
+   "unit": "dC",
+   "desc": "Not read anywhere in this firmware build (T6 3.47V). The name suggests a maximum allowed difference between the two cold sensors; probably used by other models that share the parameter table."
+  },
+  "TCOLDOPENDELAY": {
+   "group": "Dispensing",
+   "unit": "10ms",
+   "desc": "Cold dispense start: delay between opening the cold-water valve and opening the inlet (refill) valve."
+  },
+  "TCOLDCLOSEDELAY": {
+   "group": "Dispensing",
+   "unit": "10ms",
+   "desc": "Cold dispense stop: the inlet valve closes first, and the cold-water valve closes this long afterwards."
+  },
+  "TCOMPOFFDELAY": {
+   "group": "Compressor",
+   "unit": "10s",
+   "desc": "Compressor restart delay (minimum off time) after every stop and at power-up, to protect the compressor (status 0x83 while waiting). Skipped when the factory jumper is fitted."
+  },
+  "TCOMPMAXON": {
+   "group": "Compressor",
+   "unit": "min",
+   "desc": "Maximum continuous compressor run time. When it expires the compressor stops, fault 0x84 is set and a forced pause of TCOMPPAUSEMIN follows. The timer is reloaded while cold water is being dispensed."
+  },
+  "TVALVEON": {
+   "group": "Dispensing",
+   "unit": "10s",
+   "desc": "Safety timeout for the inlet, cold and hot valves. A valve open longer than this is closed and fault 0x84 is latched."
+  },
+  "TCOLDPRESS": {
+   "group": "Dispensing",
+   "unit": "10ms",
+   "desc": "Cold key hold time: loaded into the cold key hold timer when the cold key is pressed. Whether it acts as a start delay or as the threshold between a measured cup and continuous flow has not been fully traced."
+  },
+  "TMAXPRESS": {
+   "group": "Dispensing",
+   "unit": "10s",
+   "desc": "Not read anywhere in this firmware build. The name suggests a maximum dispense time while a key is held; probably used by other models."
+  },
+  "TUVPERIOD_T3_26": {
+   "group": "UV",
+   "unit": "10min",
+   "desc": "Interval between periodic UV sterilising cycles. Only active when SYSTEMCONFIG6 bit 0 is set."
+  },
+  "TMINFILAMENTS_T6": {
+   "group": "UV",
+   "unit": "s",
+   "desc": "UV lamp filament warm-up time before the lamp is struck."
+  },
+  "TUVKEEP": {
+   "group": "UV",
+   "unit": "s",
+   "desc": "UV on-time of the cycle started after each cold dispense (keeps the refilled water sterilised)."
+  },
+  "TUVOPERATING_T3_26": {
+   "group": "UV",
+   "unit": "s",
+   "desc": "Time after switching the UV lamp on before the lamp sensor (RJ1) is checked. If it still sees no light, the lamp is switched off and fault 0x8B (UV lamp did not light) is set."
+  },
+  "TUVON": {
+   "group": "UV",
+   "unit": "s",
+   "desc": "UV on-time of periodic cycles and of the cycle that runs after standby."
+  },
+  "TMAXHOTDIFF": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Hot-tank plausibility check: if the bottom sensor reads this much (or more) above the top sensor, the heater is switched off and fault 0x8A is set."
+  },
+  "TSLEEPHOTCUTOUT": {
+   "group": "Heating",
+   "unit": "C",
+   "desc": "Hot-tank target temperature in sleep (energy-saving) mode, used for both sensors."
+  },
+  "TBOIL": {
+   "group": "Heating",
+   "unit": "C",
+   "desc": "Boiling / maximum hot-water temperature (set in the INSTALLATION and SERVICE 'Boiling temp' menus, e.g. lower at altitude). The normal and extra-hot cut-outs are TBOIL minus the TDELTAHOT... values. The heater always switches off when a sensor reaches TBOIL − 1; at TBOIL + 2 it switches off and over-temperature fault 0x8E is set."
+  },
+  "TDELTAHOTTOPNORMALCUTOUT": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Normal mode: top-sensor cut-out = TBOIL − this."
+  },
+  "THOTTOPSLEEPDELTA": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Sleep mode re-heat hysteresis, top sensor: the heater restarts when the top sensor drops this far below its cut-out."
+  },
+  "THOTTOPNORMALDELTA": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Normal / extra-hot re-heat hysteresis, top sensor: the heater restarts when the top sensor drops this far below its cut-out."
+  },
+  "THOTBOTTOMSLEEPDELTA": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Sleep mode re-heat hysteresis, bottom sensor."
+  },
+  "THOTBOTTOMNORMALDELTA": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Normal / extra-hot re-heat hysteresis, bottom sensor."
+  },
+  "TDELTAHOTTOPEXHOTCUTOUT": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Extra-hot mode: top-sensor cut-out = TBOIL − this."
+  },
+  "TDELTAHOTFULLPOWER": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Heater power band: passed to the heater power selection (burst patterns at ROM 0xFC5C). Most likely full power when further than this below the target and reduced power when closer (inferred)."
+  },
+  "THOTCONTALLOWDISPENSE": {
+   "group": "Heating",
+   "unit": "C",
+   "desc": "Minimum top-sensor temperature for hot dispensing: hot water is enabled once the top sensor reaches this, and blocked below it in sleep mode."
+  },
+  "THEATERMAXON": {
+   "group": "Heating",
+   "unit": "min",
+   "desc": "Maximum continuous heater on-time. When it expires the heater switches off and fault 0x84 is set. The timer is reloaded while hot water is being dispensed."
+  },
+  "THOTWATERDISPMIN": {
+   "group": "Dispensing",
+   "unit": "100ms",
+   "desc": "Maximum length of one hot-water dispense; dispensing stops automatically after this."
+  },
+  "THOTOPENDELAY": {
+   "group": "Dispensing",
+   "unit": "10ms",
+   "desc": "Hot dispense start: delay between opening the hot-water valve and opening the inlet valve."
+  },
+  "THOTCLOSEDELAY": {
+   "group": "Dispensing",
+   "unit": "10ms",
+   "desc": "Hot dispense stop: the inlet valve closes first, and the hot-water valve closes this long afterwards."
+  },
+  "ZCCYCLELENGTH": {
+   "group": "Heating",
+   "unit": "raw",
+   "desc": "Heater burst-fire cycle length, in 10 ms ticks (mains half-cycles), used by the heater burst-pattern driver."
+  },
+  "TSLEEPDELAY_T3_26": {
+   "group": "System",
+   "unit": "10min",
+   "desc": "Energy saving: idle time before the unit enters sleep mode automatically (only when SYSTEMCONFIG2 bit 0 is set). Set from the 'Energy Saving Mode' menu; reloaded on every wake-up."
+  },
+  "TMMIUPDATERATE": {
+   "group": "Display",
+   "unit": "10ms",
+   "desc": "Display refresh interval (UI redraw timer, counted in UI task ticks; ~10 ms each, inferred)."
+  },
+  "SYSTEMCONFIG": {
+   "group": "Config",
+   "unit": "bits",
+   "desc": "Hardware options.",
+   "bits": [
+    [
+     "0x03",
+     "Heater type (0 = no heater fitted)"
+    ],
+    [
+     "0x08",
+     "UV lamp fitted"
+    ],
+    [
+     "0x40",
+     "Second hot sensor: bottom on AN1 (else AN0)"
+    ],
+    [
+     "0x80",
+     "Key beep setting"
+    ]
+   ]
+  },
+  "WATERFLOW": {
+   "group": "Dispensing",
+   "unit": "flow",
+   "desc": "Water flow rate. Converts cup/jug sizes into valve-open time (flow × 100 / 60) and inlet-valve seconds into volume for the filter-usage display."
+  },
+  "TEMPHOTCHNGTIME": {
+   "group": "Heating",
+   "unit": "10s",
+   "desc": "Extra-hot timeout: extra-hot mode switches back to normal after this, and the timer restarts while hot water is dispensed. Also used as the heating start-up timer at power-up."
+  },
+  "CHILDPROTECT": {
+   "group": "Dispensing",
+   "unit": "flag",
+   "desc": "Hot-water child lock (Settings → Child Lock, or serial CP1 / CP0). Only effective on models with hot water."
+  },
+  "CHILDPROTECTTIME": {
+   "group": "Dispensing",
+   "unit": "s",
+   "desc": "Not read anywhere in this firmware build. The name suggests how long hot water stays unlocked after the child lock is released."
+  },
+  "TEMPCOLDCHNGTIME": {
+   "group": "Cooling",
+   "unit": "min",
+   "desc": "Not read anywhere in this firmware build."
+  },
+  "SYSTEMCONFIG2": {
+   "group": "Config",
+   "unit": "bits",
+   "desc": "Energy saving and language.",
+   "bits": [
+    [
+     "0x01",
+     "Energy saving (automatic sleep) enabled"
+    ],
+    [
+     "0x38",
+     "Language: 0 English, 4 Russian, 5 Hebrew"
+    ]
+   ]
+  },
+  "SYSTEMCONFIG3": {
+   "group": "Config",
+   "unit": "bits",
+   "desc": "Sensors, units and display options.",
+   "bits": [
+    [
+     "0x01",
+     "Cold sensor on AN4 (else AN5)"
+    ],
+    [
+     "0x04",
+     "Temperatures in °C (else °F)"
+    ],
+    [
+     "0x10",
+     "Wake-up timer 1 enabled (inferred)"
+    ],
+    [
+     "0x20",
+     "Wake-up timer 2 enabled (inferred)"
+    ],
+    [
+     "0x40",
+     "Spout light"
+    ],
+    [
+     "0x80",
+     "Clock view: big digits / text style"
+    ]
+   ]
+  },
+  "TCOMPPAUSEMIN": {
+   "group": "Compressor",
+   "unit": "min",
+   "desc": "Forced compressor pause after TCOMPMAXON expires, or after a dryer/condenser over-temperature (TMAXDRYER)."
+  },
+  "TDELTAHOTBOTEXHOTCUTOUT": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Extra-hot mode: bottom-sensor cut-out = TBOIL − this."
+  },
+  "TDELTAHOTBOTNORMALCUTOUT": {
+   "group": "Heating",
+   "unit": "dC",
+   "desc": "Normal mode: bottom-sensor cut-out = TBOIL − this."
+  },
+  "DBNCCNTR": {
+   "group": "Display",
+   "unit": "count",
+   "desc": "Keypad debounce: number of identical UI task scans before a key change is accepted."
+  },
+  "TPOWERDELAY": {
+   "group": "System",
+   "unit": "h",
+   "desc": "Power Down Mode setting (Time & Date → Power Down Mode); 0 = off. Unit code 6, most likely hours (0–72), inferred."
+  },
+  "TNORMALCOOLCUTOUT": {
+   "group": "Dispensing",
+   "unit": "C",
+   "desc": "Target temperature of a 'cool' cup. The hot/cold split is calculated from the current tank temperatures."
+  },
+  "TNORMALWARMCUTOUT": {
+   "group": "Dispensing",
+   "unit": "C",
+   "desc": "Target temperature of a 'warm' mixed cup (user menu 'Mix water temp')."
+  },
+  "QTYCOOLWATER": {
+   "group": "Dispensing",
+   "unit": "ml10",
+   "desc": "Size of a 'cool' cup."
+  },
+  "QTYWARMWATER": {
+   "group": "Dispensing",
+   "unit": "ml10",
+   "desc": "Size of a 'warm' mixed cup (user menu 'Mix water qty')."
+  },
+  "WKUPHOUR1": {
+   "group": "System",
+   "unit": "hour",
+   "desc": "Wake-up time 1, hour: the unit leaves sleep mode at this time (Time & Date → Wake Up 1). Enabled by SYSTEMCONFIG3 bit 4 (inferred)."
+  },
+  "WKUPMINUTE1": {
+   "group": "System",
+   "unit": "minute",
+   "desc": "Wake-up time 1, minute."
+  },
+  "WKUPHOUR2": {
+   "group": "System",
+   "unit": "hour",
+   "desc": "Wake-up time 2, hour (Time & Date → Wake Up 2). Enabled by SYSTEMCONFIG3 bit 5 (inferred)."
+  },
+  "WKUPMINUTE2": {
+   "group": "System",
+   "unit": "minute",
+   "desc": "Wake-up time 2, minute."
+  },
+  "SYSTEMCONFIG4": {
+   "group": "Config",
+   "unit": "bits",
+   "desc": "Installation state and optional sensors.",
+   "bits": [
+    [
+     "0x01",
+     "Installation flow pending (shipping mode)"
+    ],
+    [
+     "0x08",
+     "Dryer / condenser sensor (AN7) fitted"
+    ],
+    [
+     "0x10",
+     "Device sensor (AN6) + condenser fan control"
+    ],
+    [
+     "0x20",
+     "UV lamp / filter switches and replacement counters"
+    ],
+    [
+     "0x40",
+     "Service flag (used by UI refresh and the service 'resetting' screen; not decoded)"
+    ]
+   ]
+  },
+  "TDEVICECUTOUT": {
+   "group": "Compressor",
+   "unit": "C",
+   "desc": "Condenser fan: with the compressor off, the fan stops when the device temperature (AN6) is below this."
+  },
+  "TDELTADEVICE": {
+   "group": "Compressor",
+   "unit": "dC",
+   "desc": "Condenser fan: with the compressor off, the fan starts when the device temperature reaches TDEVICECUTOUT + this."
+  },
+  "TFANOPERATING": {
+   "group": "Compressor",
+   "unit": "min",
+   "desc": "Condenser fan run-on time after the compressor stops."
+  },
+  "QTYCOLDWATER": {
+   "group": "Dispensing",
+   "unit": "ml10",
+   "desc": "Size of a cold cup (user menu 'Cold water qty')."
+  },
+  "TMAXDRYER": {
+   "group": "Compressor",
+   "unit": "C",
+   "desc": "Dryer / condenser temperature limit (AN7, only if SYSTEMCONFIG4 bit 3 is set). Above it the compressor is stopped for TCOMPPAUSEMIN and the fan runs on."
+  },
+  "TDELTAREPLACE": {
+   "group": "System",
+   "unit": "days",
+   "desc": "Used when calculating days left until filter / UV-lamp replacement; most likely how many days before the due date the reminder appears (inferred)."
+  },
+  "SYSTEMCONFIG5": {
+   "group": "Config",
+   "unit": "bits",
+   "desc": "Application (which taps exist), menu and backlight.",
+   "bits": [
+    [
+     "0x10",
+     "Menu option (tested by most user-menu handlers; not fully decoded)"
+    ],
+    [
+     "0x60",
+     "APPLICATION: 0 COLD ONLY, 1 HOT ONLY, 2 COLD/HOT, 3 COLD/ROOM"
+    ],
+    [
+     "0x80",
+     "Back light"
+    ]
+   ]
+  },
+  "QTYHOTWATER": {
+   "group": "Dispensing",
+   "unit": "ml10",
+   "desc": "Size of a hot cup (user menu 'Hot water qty')."
+  },
+  "QTYJUGWATER": {
+   "group": "Dispensing",
+   "unit": "ml100",
+   "desc": "Size of the jug portion."
+  },
+  "THOTPRESS": {
+   "group": "Dispensing",
+   "unit": "10ms",
+   "desc": "Hot key hold time: loaded into the hot key hold timer when the hot key is pressed. The longer default than TCOLDPRESS suggests a deliberate safety hold before hot water flows (inferred)."
+  },
+  "SYSTEMCONFIG6": {
+   "group": "Config",
+   "unit": "bits",
+   "desc": "UV schedule.",
+   "bits": [
+    [
+     "0x01",
+     "Periodic UV cycles enabled (TUVPERIOD_T3_26)"
+    ]
+   ]
+  },
+  "MAXVOLPERFILTER": {
+   "group": "System",
+   "unit": "raw",
+   "desc": "Not read anywhere in this firmware build. The name suggests the filter capacity (volume per filter)."
+  },
+  "TUVVERIFYOFF": {
+   "group": "UV",
+   "unit": "s",
+   "desc": "UV sensor self-test: minimum time since the lamp was last switched on before the lamp-off check may run."
+  },
+  "TUVVERIFYOFFPERIOD": {
+   "group": "UV",
+   "unit": "s",
+   "desc": "UV sensor self-test: spacing between the 3 lamp-off check attempts. If the sensor still reports light with the lamp off after 3 attempts, fault 0x90 is set."
+  },
+  "TUVLONGVERIFY": {
+   "group": "UV",
+   "unit": "min",
+   "desc": "Interval between UV sensor self-tests (lamp-off checks)."
+  },
+  "TABNORMALCOLDHIGH": {
+   "group": "UV",
+   "unit": "C",
+   "desc": "If a cold sensor reads above this, a UV cycle is forced and fault 0x90 (cold water abnormally warm) is set."
+  },
+  "SYSTEMCONFIG7": {
+   "group": "Config",
+   "unit": "bits",
+   "since": "3.5.13",
+   "desc": "New option byte in v3.5.13 (RAM mirror 0xEE0). Mostly not decoded.",
+   "bits": [
+    [
+     "0x01",
+     "Forced on at boot in production mode / with the factory jumper (not decoded)"
+    ]
+   ]
+  },
+  "PLASTICSLEEPMODESTARTHEATING": {
+   "group": "Hot",
+   "unit": "C",
+   "since": "3.5.13",
+   "desc": "Sleep-mode heating restart temperature for a PLASTIC hot tank (new in v3.5.13). Plastic tanks use a lower sleep temperature than stainless (inferred from the name; not traced in code)."
+  }
+ },
+ "counters": {
+  "HWS": {
+   "unit": "s",
+   "desc": "Total time the hot-water valve has been open."
+  },
+  "CWS": {
+   "unit": "s",
+   "desc": "Total time the cold-water valve has been open."
+  },
+  "IWS": {
+   "unit": "s",
+   "desc": "Total time the inlet valve has been open (water drawn in through the filter)."
+  },
+  "CD": {
+   "unit": "count",
+   "desc": "Number of cold dispenses."
+  },
+  "HD": {
+   "unit": "count",
+   "desc": "Number of hot dispenses."
+  },
+  "EH": {
+   "unit": "count",
+   "desc": "Number of extra-hot activations."
+  },
+  "FM": {
+   "unit": "min",
+   "desc": "Minutes counted by the UV module (ticks every minute unless the UV service override is active)."
+  },
+  "UVS": {
+   "unit": "s",
+   "desc": "Total time the UV lamp has been lit."
+  },
+  "UI": {
+   "unit": "count",
+   "desc": "UV lamp cycle counter, updated when the lamp switches off (completed cycles / lamp-fail counter)."
+  },
+  "H78": {
+   "unit": "s",
+   "desc": "Time the last heat-up took from 70 °C to 80 °C (latest measurement, not a total): a heater performance indicator."
+  },
+  "CG": {
+   "unit": "s",
+   "desc": "Duration of the last cold pull-down (latest measurement)."
+  },
+  "CGT": {
+   "unit": "dC",
+   "desc": "Temperature drop achieved by the last cold pull-down (byte statistic)."
+  },
+  "CMM": {
+   "unit": "min",
+   "desc": "Longest single compressor run ever recorded (byte statistic, maximum)."
+  },
+  "CSS": {
+   "unit": "s",
+   "desc": "Total compressor run time."
+  },
+  "HSS": {
+   "unit": "s",
+   "desc": "Total heater on-time."
+  },
+  "GUV": {
+   "unit": "days",
+   "desc": "Days since the UV lamp was replaced (reset by answering NEW after refitting the lamp)."
+  },
+  "GFI": {
+   "unit": "days",
+   "desc": "Days since the filter was replaced."
+  },
+  "FWU": {
+   "unit": "s",
+   "desc": "Inlet-valve seconds since the filter was replaced; multiplied by WATERFLOW this gives the volume through the filter."
+  }
+ },
+ "versions": {
+  "_about": "Per-firmware differences. 'rom' lists ROM-table entries that differ from v3.47 as [index, default, min, max] (index null = same index as v3.47). Indexes 0-74 mean the same in both versions.",
+  "3.5.13": {
+   "rom": {
+    "TNORMALCOLDCUTOUT": [
+     null,
+     10,
+     5,
+     20
+    ],
+    "TDELTAHOTTOPNORMALCUTOUT": [
+     null,
+     4,
+     0,
+     10
+    ],
+    "THOTCONTALLOWDISPENSE": [
+     null,
+     0,
+     80,
+     90
+    ],
+    "THEATERMAXON": [
+     null,
+     20,
+     5,
+     20
+    ],
+    "TMMIUPDATERATE": [
+     null,
+     15,
+     1,
+     100
+    ],
+    "SYSTEMCONFIG7": [
+     75,
+     2,
+     0,
+     255
+    ],
+    "PLASTICSLEEPMODESTARTHEATING": [
+     76,
+     50,
+     45,
+     60
+    ]
+   },
+   "notes": {
+    "SYSTEMCONFIG2": "Language field 0x38 is what the shell command set_language=n writes (accepted n = 0-7).",
+    "SYSTEMCONFIG3": "v3.5.13: bit 0x02 = production mode (set_production_mode); when set, boot forces the factory configuration (SYSTEMCONFIG |= 0xBF, SYSTEMCONFIG2 = 0x40, SYSTEMCONFIG4 = 0xE7, SYSTEMCONFIG7 |= 1), as the factory jumper does.",
+    "SYSTEMCONFIG4": "v3.5.13: bit 0x01 is what set_shipping_mode=n writes; testing_mode=1 clears bits 0x26 in RAM.",
+    "SYSTEMCONFIG6": "v3.5.13: bit 0x01 is the hot tank type reported by get_hwt_type (Plastic / Stainless; RAM mirror 0xEDF). Which value means plastic is not confirmed.",
+    "THOTCONTALLOWDISPENSE": "v3.5.13 ROM default is 0, below its own minimum of 80 (as listed in the v3.5.13 README)."
+   },
+   "count": 77
+  }
+ }
+}

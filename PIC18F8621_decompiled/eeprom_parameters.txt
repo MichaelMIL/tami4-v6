@@ -1,0 +1,109 @@
+EEPROM parameters. ROM table at 0xDD62 gives name/default/min/max/unit/id.
+In EEPROM: value at [id-1], unit-specific maximum at [id-1+0x4B], minimum at [id-1+0x96].
+Unit = raw unit code from ROM table (not fully decoded; 0 looks like deg C, 3 minutes, 4/5 longer periods).
+
+  id name                       value EEmin EEmax | ROMdef ROMmin ROMmax unit  note
+0x02 TSENSORSRATE                   3     1    10 |      3      1     10    1  
+0x03 TSLEEPCOLDCUTOUT               9     3    20 |     10      3     20    0  changed from default
+0x04 TNORMALCOLDCUTOUT              9     3    20 |     10      3     20    0  changed from default
+0x05 TTOPDELTACOLD                  8     5    20 |      8      5     20    0  
+0x06 TBOTTOMDELTACOLD               4     1     5 |      4      1      5    0  
+0x07 TMAXCOLDDIFF                  50     1   100 |     50      1    100    0  
+0x08 TCOLDOPENDELAY                20     1   100 |     20      1    100    1  
+0x09 TCOLDCLOSEDELAY               30     1   100 |     30      1    100    1  
+0x0a TCOMPOFFDELAY                 18     6    30 |     18      6     30    4  
+0x0b TCOMPMAXON                    45     9   120 |     45      9    120    5  
+0x0c TVALVEON                      30    30    60 |     30     30     60    4  
+0x0d TCOLDPRESS                    20     0   200 |     20      0    200    1  
+0x0e TMAXPRESS                     30     6    60 |     30      6     60    4  
+0x0f TUVPERIOD_T3_26               12     6    24 |     12      6     24    7  
+0x10 TMINFILAMENTS_T6               8     1   180 |      8      1    180    3  
+0x11 TUVKEEP                       40    10   120 |     40     10    120    3  
+0x12 TUVOPERATING_T3_26             3     0     5 |      3      0      5    3  
+0x13 TUVON                         40    10   120 |     40     10    120    3  
+0x14 TMAXHOTDIFF                   70     1   100 |     70      1    100    0  
+0x15 TSLEEPHOTCUTOUT               60    50    80 |     60     50     80    0  
+0x16 TBOIL                        100    80   100 |    100     80    100    0  
+0x17 TDELTAHOTTOPNORMALCUTOUT       7     5    15 |      7      5     15    0  
+0x18 THOTTOPSLEEPDELTA              3     1     5 |      3      1      5    0  
+0x19 THOTTOPNORMALDELTA             2     1     3 |      2      1      3    0  
+0x1a THOTBOTTOMSLEEPDELTA           3     1    30 |      3      1     30    0  
+0x1b THOTBOTTOMNORMALDELTA         10     1    30 |     10      1     30    0  
+0x1c TDELTAHOTTOPEXHOTCUTOUT        1     1     5 |      1      1      5    0  
+0x1d TDELTAHOTFULLPOWER             4     1    20 |      4      1     20    0  
+0x1e THOTCONTALLOWDISPENSE         85    80    90 |     85     80     90    0  
+0x1f THEATERMAXON                   9     5    20 |      9      5     20    5  
+0x20 THOTWATERDISPMIN             150    10   255 |    150     10    255    2  
+0x21 THOTOPENDELAY                 20     1   100 |     20      1    100    1  
+0x22 THOTCLOSEDELAY                30     1   100 |     30      1    100    1  
+0x23 ZCCYCLELENGTH                 10     1   200 |     10      1    200    0  
+0x24 TSLEEPDELAY_T3_26              3     3    24 |      6      3     24    7  changed from default
+0x25 TMMIUPDATERATE                10     1   100 |     10      1    100    1  
+0x26 SYSTEMCONFIG                 126     0   255 |    126      0    255    0  
+0x27 WATERFLOW                     12     0   100 |     12      0    100    0  
+0x28 TEMPHOTCHNGTIME               30     3    60 |     30      3     60    4  
+0x29 CHILDPROTECT                   0     0     1 |      1      0      1    0  changed from default
+0x2a CHILDPROTECTTIME              55     2   200 |     55      2    200    3  
+0x2b TEMPCOLDCHNGTIME              15     1    60 |     15      1     60    5  
+0x2c SYSTEMCONFIG2                 41     0   255 |     41      0    255    0  
+0x2d SYSTEMCONFIG3                196     0   255 |     68      0    255    0  changed from default
+0x2e TCOMPPAUSEMIN                 30    10    60 |     30     10     60    5  
+0x2f TDELTAHOTBOTEXHOTCUTOUT       35     1    50 |     35      1     50    0  
+0x30 TDELTAHOTBOTNORMALCUTOUT      15     5    20 |     15      5     20    0  
+0x31 DBNCCNTR                      10     1   100 |     10      1    100    0  
+0x32 TPOWERDELAY                    0     0    72 |      0      0     72    6  
+0x33 TNORMALCOOLCUTOUT             15    10    20 |     15     10     20    0  
+0x34 TNORMALWARMCUTOUT             44    10    50 |     30     10     50    0  changed from default
+0x35 QTYCOOLWATER                  14     6    30 |     14      6     30    0  
+0x36 QTYWARMWATER                  16     6    30 |     14      6     30    0  changed from default
+0x37 WKUPHOUR1                      0     0    23 |      0      0     23    0  
+0x38 WKUPMINUTE1                    0     0    59 |      0      0     59    0  
+0x39 WKUPHOUR2                      0     0    23 |      0      0     23    0  
+0x3a WKUPMINUTE2                    0     0    59 |      0      0     59    0  
+0x3b SYSTEMCONFIG4                231     0   255 |     35      0    255    0  changed from default
+0x3c TDEVICECUTOUT                 55    20    75 |     55     20     75    0  
+0x3d TDELTADEVICE                  10     5    20 |     10      5     20    0  
+0x3e TFANOPERATING                  1     0    10 |      1      0     10    0  
+0x3f QTYCOLDWATER                  20     6    30 |     14      6     30    0  changed from default
+0x40 TMAXDRYER                     60    50    80 |     60     50     80    0  
+0x41 TDELTAREPLACE                 10     1    25 |     10      1     25    0  
+0x42 SYSTEMCONFIG5                 86     0   255 |     82      0    255    0  changed from default
+0x43 QTYHOTWATER                   12     6    30 |     14      6     30    0  changed from default
+0x44 QTYJUGWATER                   10     3    15 |     10      3     15    0  
+0x45 THOTPRESS                    100     0   200 |    100      0    200    1  
+0x46 SYSTEMCONFIG6                  0     0   255 |      0      0    255    0  
+0x47 MAXVOLPERFILTER              100     0   255 |    100      0    255    0  
+0x48 TUVVERIFYOFF                  60    10   120 |     60     10    120    3  
+0x49 TUVVERIFYOFFPERIOD             3     1    12 |      3      1     12    3  
+0x4a TUVLONGVERIFY                 60    30   120 |     60     30    120    5  
+0x4b TABNORMALCOLDHIGH             45    20   100 |     45     20    100    0  
+
+
+EEPROM LAYOUT (1024 bytes)
+  0x000        parameter FT (first-time/factory flag, id 1) = 0x00; if non-zero at power-up the usage counters are cleared
+  0x001-0x04A  parameter values (id 2..0x4B), see table above
+  0x04B-0x095  per-parameter MAXIMUM (same order)
+  0x096-0x0E0  per-parameter MINIMUM (same order)
+  0x0E1-0x0E3  unused (FF)
+  0x0E4-0x123  16 x 32-bit usage counters (little-endian), loaded into RAM 0x0B2 at power-up
+  0x124        byte statistic CMM (longest compressor run, minutes) = 49
+  0x125        byte statistic CGT (temperature drop of last pull-down) = 4
+  0x126-0x3FF  unused (FF)
+
+USAGE COUNTERS stored in this unit
+   0 HWS hot valve open s                   63,630
+   1 CWS cold valve open s                 473,771  (= 5.5 days)
+   2 IWS inlet valve open s                537,297  (= 6.2 days)
+   3 CD cold dispenses                      64,284
+   4 HD hot dispenses                        9,218
+   5 EH extra-hot activations                2,531
+   6 FM UV-module minutes                       60
+   7 UVS UV lamp lit s                           0
+   8 UI UV cycles completed                      0
+   9 H78 70->80C heat time s                    30
+  10 CG cooling pull-down s                    266
+  11 HSS heater on s                     2,195,333  (= 25.4 days)
+  12 CSS compressor on s                34,706,271  (= 401.7 days)
+  13 GUV days since UV lamp change               0
+  14 GFI days since filter change                0
+  15 FWU inlet s since filter change           219

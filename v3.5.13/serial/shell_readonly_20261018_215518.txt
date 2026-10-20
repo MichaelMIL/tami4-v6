@@ -1,0 +1,81 @@
+>>> ver
+ver
+T6
+3.5.13 Feb 07 2019 17:37:44
+OK
+
+>>> ls
+ls
+19
+ 0,                       ls
+ 1,                     temp
+ 2,                    input
+ 3,                   output
+ 4,                      hot
+ 5,                     cold
+ 6,                      mix
+ 7,                       ex
+ 8,                      ver
+ 9,             get_hwt_type
+10,        get_errors_bitmap
+11,                   get_wu
+12, restore_factory_settings
+13,             set_language
+14,        set_shipping_mode
+15,      set_production_mode
+16,             manual_press
+17,             testing_mode
+18,                    reset
+OK
+
+>>> temp
+temp
+HT= -1, HB= -1, CB= -1
+OK
+
+>>> input
+input
+A2D: HT=1023, HB=1023, CT=1023, CB=1023
+Buttons:  110
+Inputs: UV_POS=0, UV_READY=0, HEATER_FEEDBACK=1
+Outputs: 0,   UV_DRIVE,0
+ 1,        FAN,0
+ 2, COMPRESSOR,0
+ 3,     HEATER,0
+ 4, COLD_VALVE,0
+ 5,  HOT_VALVE,0
+ 6,INLET_VALVE,0
+ 7,    LCDBKLT,0
+OK
+
+>>> output
+output
+Outputs: 0,   UV_DRIVE,0
+ 1,        FAN,0
+ 2, COMPRESSOR,0
+ 3,     HEATER,0
+ 4, COLD_VALVE,0
+ 5,  HOT_VALVE,0
+ 6,INLET_VALVE,0
+ 7,    LCDBKLT,0
+OK
+
+>>> get_hwt_type
+get_hwt_type
+Hot Tank Plastic  
+OK
+
+>>> get_errors_bitmap
+get_errors_bitmap
+ 6,21,
+OK
+
+>>> get_wu
+ge_wu
+ERROR -123
+
+>>> get_wu (resent)
+get_wu
+Water Usage        10667
+OK
+

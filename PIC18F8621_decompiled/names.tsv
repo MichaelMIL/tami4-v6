@@ -1,0 +1,1626 @@
+# kind	address	name	comment
+# ---- startup / runtime ----
+func	0xfc08	c018_startup	C18 startup: runs _do_cinit then loops calling main()
+func	0xf956	_do_cinit	C18 runtime: copy initialised data (table at ROM 0x2a) into RAM
+func	0xfcbc	user_init_hook	Empty startup hook called before main()
+func	0xb256	main	Hardware init, load SYSTEMCONFIG bytes, create Salvo tasks, run scheduler forever
+func	0xbcc0	isr_high	High-priority ISR: save compiler temps, run EUSART2 handler
+func	0xbd4a	isr_low	Low-priority ISR: Timer0 10 ms tick (reload TMR0, drive Salvo timer)
+func	0xb49c	isr_low_other	Low-priority ISR fallback (empty)
+func	0xbc26	hw_init_peripherals	Configure EUSART2 9600 8N1, Timer0 10 ms tick, ADC, comparators off, port directions
+func	0xb068	outputs_all_off	Drive all load outputs (valves, heater, compressor, fan...) to off at startup
+# ---- Salvo RTOS ----
+func	0x9ce6	OSSched	Salvo RTOS scheduler (runs eligible tasks, processes delay queue)
+func	0x9af0	OSCreateTask	Salvo: create task (function pointer, TCB pointer, priority)
+func	0xb482	os_tick	Called every Timer0 tick: OSTimer + signal tick semaphore (ECB 0x9e)
+func	0xa18c	OSRestoreInts	Salvo helper: restore saved GIE/PEIE state
+func	0xa1aa	OSDisableInts	Salvo helper: save and clear GIE/PEIE
+func	0x9b64	OSInsPrioQ	Salvo: insert TCB into priority queue
+func	0x9e94	OSDispatch	Salvo: dispatch current task
+func	0x9f46	OSCreateSem	Salvo: create semaphore (ECB pointer, initial count)
+func	0x9f7a	OSSignalSem	Salvo: signal semaphore
+func	0xb49e	OSIdlingHook	Salvo idle hook
+var	0x060	os_tmp_tcb_ptr	Salvo scratch TCB pointer (2 bytes)
+var	0x062	os_tcb_serial_task	Salvo TCB (6 bytes) for task_serial_protocol
+var	0x06e	os_tcb_task_2c22	Salvo TCB (6 bytes) for task at 0x2c22
+var	0x074	os_tcb_task_aa56	Salvo TCB (6 bytes) for task at 0xaa56
+var	0x07a	os_tcb_task_da82	Salvo TCB (6 bytes) for task at 0xda82
+var	0x086	os_tcb_tick_task	Salvo TCB (6 bytes) for task_tick_10ms
+var	0x08c	os_tcb_second_task	Salvo TCB (6 bytes) for task_second
+var	0x092	os_tcb_task_d794	Salvo TCB (6 bytes) for task at 0xd794
+var	0x098	OScTcbP	Salvo: pointer to currently running task's TCB (2 bytes)
+var	0x09e	sem_tick_10ms	Salvo semaphore ECB signalled every 10 ms tick
+var	0x0a2	sem_tick_1s	Salvo semaphore ECB signalled once per second
+var	0x0aa	OSeligQTail	Salvo eligible queue tail pointer (2 bytes)
+var	0x0ac	OSeligQP	Salvo eligible queue head pointer (2 bytes)
+var	0x0ae	OSdelayQP	Salvo delay queue head pointer (2 bytes)
+var	0x0b0	OStimerTicks	Salvo free-running timer tick count
+var	0x0b1	OSlostTicks	Salvo: timer ticks not yet processed by OSSched
+# ---- tasks ----
+func	0xb0aa	task_tick_10ms	Priority 1 task: every 10 ms tick; 100 ms and 1 s sub-schedules
+func	0xb104	task_second	Priority 4 task: once-per-second jobs, plus every 10 s and every 60 s jobs
+func	0x6e5c	task_serial_protocol	Priority 5 task: serial console. Commands: RS NM SM ST PD GHT GCT GDT COT DCW DHW STP CP0 CP1 EH1 EH0 GCS GHS HTS UVS IVS CVS HVS CWC GCH TC AC g, hidden GP SP RP GPL RPL SMN SMX GC RC GCL RCL VER XC LCL
+var	0x15d	tick_div_100ms	task_tick_10ms: counts 10 ms ticks to 100 ms
+var	0x15e	tick_div_1s	task_tick_10ms: counts 10 ms ticks to 1 s (signals sem_tick_1s)
+var	0x15f	sec_div_10s	task_second: counts seconds to 10 s
+var	0x160	sec_div_60s	task_second: counts seconds to 1 minute
+# ---- timer / clock ----
+var	0xeda	tmr0_reload_lo	Timer0 reload value low byte (0xD900 => 10 ms at 4 MHz)
+var	0xedb	tmr0_reload_hi	Timer0 reload value high byte
+var	0xedc	tmr0_next_lo	Timer0 computed reload low byte (reload + elapsed)
+var	0xedd	tmr0_next_hi	Timer0 computed reload high byte
+var	0xede	os_tick_suppress	Non-zero: suppress os_tick (ticks counted in tick_hold_counter instead)
+var	0xedf	tick_hold_counter	Ticks counted (mod 100) while os_tick is suppressed
+# ---- configuration (copied from EEPROM in main) ----
+var	0x157	cfg_systemconfig	EEPROM param SYSTEMCONFIG (option bits)
+var	0x158	cfg_systemconfig2	EEPROM param SYSTEMCONFIG2 (option bits)
+var	0x159	cfg_systemconfig3	EEPROM param SYSTEMCONFIG3 (option bits)
+var	0x15a	cfg_systemconfig4	EEPROM param SYSTEMCONFIG4 (option bits)
+var	0x15b	cfg_systemconfig5	EEPROM param SYSTEMCONFIG5 (option bits)
+var	0x15c	cfg_systemconfig6	EEPROM param SYSTEMCONFIG6 (option bits)
+var	0x161	cfg_sleep_delay	EEPROM param TSLEEPDELAY_T3_26
+var	0x165	factory_jumper	1 = RB5 jumper fitted at power-up (forces factory configuration)
+# ---- EEPROM ----
+func	0xd67e	eeprom_read_param	Read one EEPROM byte (address = parameter id - 1)
+func	0xdfd6	eeprom_read_byte	Low-level EEPROM byte read (EEADRH:EEADR)
+func	0xe060	eeprom_write_byte	Low-level EEPROM byte write (unlock sequence, wait for WR)
+func	0xe104	eeprom_write_byte_b	Low-level EEPROM byte write (variant)
+func	0xe1aa	eeprom_write_byte_c	Low-level EEPROM byte write (variant)
+# ---- graphic LCD (ST7565-type, PORTD data bus, PORTE control) ----
+func	0xce44	lcd_init	Reset and initialise the 128x64 graphic LCD controller
+func	0xce26	lcd_delay	Short busy-wait delay for the LCD controller
+func	0xcece	lcd_write_cmd	Write a command byte to the LCD (RE3=0)
+func	0xcefe	lcd_write_data	Write a display data byte to the LCD (RE3=1)
+func	0xcf8e	lcd_read_data	Read a display data byte from the LCD
+# ---- ADC / sensors ----
+func	0xbe3c	adc_select_channel	Select ADC input channel (skips if already selected) and wait acquisition time
+func	0xbe7c	adc_read	Select channel, convert, return 10-bit result; flags sensor fault near full scale
+var	0xee1	adc_current_channel	ADC channel currently selected (0x0F = none)
+var	0x201	fault_code	Current fault / status code (0x82, 0x84, 0x85, 0x87 seen; 0 = OK)
+# ---- outputs / valves ----
+var	0xee0	outputs_shadow	Shadow of load outputs: bit0 inlet valve, bit1 hot valve, bit2 cold valve
+var	0x0f5	outputs_enable_mask	Bit mask of outputs allowed to switch on
+func	0xf760	inlet_valve_init	Inlet valve (RH0): clear state
+func	0xf76a	inlet_valve_open	Inlet valve (RH0): open, load TVALVEON safety timeout
+func	0xf79c	inlet_valve_close	Inlet valve (RH0): close, update usage counters
+func	0xf7c6	inlet_valve_count_usage	Inlet valve: per-second usage counter update while open
+func	0xf7e2	inlet_valve_timeout_tick	Inlet valve: 10 s safety timeout countdown; closes and latches fault 0x84
+func	0xf806	inlet_valve_is_open	Inlet valve: return open state
+var	0x1f7	inlet_valve_fault	Inlet valve fault latch (0x84 = open too long)
+var	0x1f8	inlet_valve_timeout	Inlet valve safety timeout countdown (units of 10 s)
+var	0x205	inlet_valve_open_flag	Inlet valve open state
+func	0xf80c	cold_valve_init	Cold water valve (RH2): clear state
+func	0xf816	cold_valve_open	Cold water valve (RH2): open, load TVALVEON safety timeout
+func	0xf84c	cold_valve_close	Cold water valve (RH2): close, update usage counters
+func	0xf86e	cold_valve_count_usage	Cold water valve: per-second usage counter update while open
+func	0xf888	cold_valve_timeout_tick	Cold water valve: 10 s safety timeout countdown; closes and latches fault 0x84
+func	0xf8ac	cold_valve_is_open	Cold water valve: return open state
+var	0x1fb	cold_valve_fault	Cold valve fault latch (0x84 = open too long)
+var	0x1fc	cold_valve_timeout	Cold valve safety timeout countdown (units of 10 s)
+var	0x207	cold_valve_open_flag	Cold valve open state
+func	0xf9f4	hot_valve_init	Hot water valve (RH1): clear state
+func	0xf9fe	hot_valve_open	Hot water valve (RH1): open, load TVALVEON safety timeout
+func	0xfa30	hot_valve_close	Hot water valve (RH1): close, update usage counters
+func	0xfa4c	hot_valve_count_usage	Hot water valve: per-second usage counter update while open
+func	0xfa64	hot_valve_timeout_tick	Hot water valve: 10 s safety timeout countdown; closes and latches fault 0x84
+func	0xfa88	hot_valve_is_open	Hot water valve: return open state
+var	0x1f9	hot_valve_fault	Hot valve fault latch (0x84 = open too long)
+var	0x1fa	hot_valve_timeout	Hot valve safety timeout countdown (units of 10 s)
+var	0x206	hot_valve_open_flag	Hot valve open state
+func	0xc9bc	heating_get_state	Heating system state: 0 sleep, 1 normal, 2 extra-hot, 3 delay, 4 no heater
+func	0xd43a	cooling_get_state	Cooling system state: 0 off, 1 on, 2 delay
+func	0xe860	heater_is_on	Return heater output state
+func	0xb5ae	child_protect_is_active	Return child-protection (hot water lock) state
+# ---- Salvo internals (continued) ----
+func	0x9f30	OS_Yield	Salvo context switch: save resume address in TCB and return to OSSched
+func	0xa038	OSDelay	Salvo: delay current task for N ticks
+func	0x9f5a	OSWaitSem	Salvo: wait on semaphore (returns 'must wait' flag)
+func	0x9f10	OSTimer	Salvo: advance OS timer tick counters
+func	0xa09a	OSStartTask	Salvo: start a stopped task (probable)
+func	0xa0b6	OSStopTask	Salvo: stop a task (probable)
+func	0xb63c	os_wait_sem_helper	Wait on a semaphore; returns non-zero if task must yield
+var	0x068	os_tcb_cooling_task	Salvo TCB (6 bytes) for task_cooling
+var	0x080	os_tcb_heating_task	Salvo TCB (6 bytes) for task_heating
+# ---- system mode ----
+func	0xb4a0	system_get_mode	Return system mode: 0 normal, 1 sleep, 2 standby/off
+func	0xb4a6	system_enter_sleep	Enter sleep mode (mode 1), reload sleep timers
+func	0xb4d2	system_wake	Leave sleep/standby: mode 0, reload sleep delay from EEPROM
+func	0xb4f8	system_enter_standby	Enter standby mode (mode 2)
+func	0xb510	system_request_wake	Set wake request flag
+func	0xb53c	is_factory_jumper	Return factory_jumper
+func	0xb5fa	cfg_application	APPLICATION setting (SYSTEMCONFIG5 bits5-6): 0 COLD ONLY, 1 HOT ONLY, 2 COLD/HOT, 3 COLD/ROOM
+func	0xc9f0	cfg_application_b	APPLICATION setting (copy in heating module)
+func	0xca08	cfg_heater_type	cfg_systemconfig & 3 (0 = no heater fitted)
+var	0x162	sleep_countdown	Minutes until automatic sleep (0xFF = disabled)
+var	0x163	standby_countdown	Countdown used for automatic standby (0xFF = disabled)
+var	0x164	sleep_check_period	Sleep timer check period (10 normal, 60 in sleep)
+var	0x166	system_mode	0 normal, 1 sleep, 2 standby
+var	0x167	main_init_flag	Cleared at start of main
+# ---- temperature sensors ----
+func	0xb542	cold_temp_read	Read cold-tank NTC on given ADC channel (table 0xEA96), filtered
+func	0xb554	cold_temp_read_ch5	Cold tank sensor on AN5
+func	0xb55e	cold_temp_read_ch4	Cold tank sensor on AN4 (AN5 if SYSTEMCONFIG3 bit0 clear)
+func	0xb572	hot_temp_read	Read hot-tank NTC on given ADC channel (table 0xEB4A); 0 if no heater
+func	0xb592	hot_temp_read_top	Hot tank top sensor (AN0)
+func	0xb59a	hot_temp_read_bottom	Hot tank bottom sensor (AN1 if SYSTEMCONFIG bit6, else AN0)
+func	0xb616	adc_read_to_tmp	adc_read() and store raw result in adc_raw
+func	0xc128	adc_read_to_tmp_b	adc_read() and store raw result in adc_raw (copy)
+func	0xbeae	ntc_table_lookup	Convert raw ADC to deg C via NTC table (FF=open, FE=short, 81=out of range)
+func	0xbf94	temp_filter	Per-channel filter: accept new temperature after 3 consistent readings
+func	0xbfcc	temp_read_ch6	Temperature on AN6 (table 0xEBD6; device/ambient sensor)
+func	0xbfdc	temp_read_ch7	Temperature on AN7 (cold table)
+func	0xbff8	beep_and_halt	Sound buzzer (RB3) briefly then loop forever (watchdog reset)
+func	0xc174	atol	C library: ASCII string to long
+var	0x032	adc_raw_lo	Raw ADC result / scratch (low byte)
+var	0x033	adc_raw_hi	Raw ADC result / scratch (high byte)
+var	0x034	ntc_table_ptr_lo	NTC conversion table pointer (low byte)
+var	0x035	ntc_table_ptr_hi	NTC conversion table pointer (high byte)
+var	0x036	temp_new_reading	Latest converted temperature before filtering
+var	0x037	temp_channel	ADC channel of the reading being filtered
+# ---- heating ----
+func	0xc606	task_heating	Priority 4 task: hot tank thermostat (normal/sleep/extra-hot), boil and fault detection
+func	0xc8e4	heating_init	Initialise heating state
+func	0xc8f6	heating_create_task	Create task_heating (TCB 0x80)
+func	0xc91a	heating_start_task	Start task_heating
+func	0xc926	heating_stop_task	Stop task_heating
+func	0xc936	heating_request_extra_hot	Start extra-hot mode (if allowed); load TEMPHOTCHNGTIME
+func	0xc982	heating_is_extra_hot	Return extra-hot flag
+func	0xc98a	heating_cancel_extra_hot	Clear extra-hot flag
+func	0xc990	heating_boil_timer_tick	Per second: count boil timer while boil detection active
+func	0xc998	heating_timers_10s	Every 10 s: count down heating timers
+func	0xc9aa	heating_minute_tick	Every minute (empty)
+func	0xc9ac	heating_restart_extra_hot_timer	Reload extra-hot timeout while extra-hot active
+func	0xc9e6	heating_read_param	eeprom_read_param wrapper for heating module
+func	0xca1c	heating_read_param_tmp	heating_read_param into tmp 0x27
+var	0x1d3	heating_flags	bit0 extra-hot, bit1 boil timing, bit3 initial, bit4 woke from sleep
+var	0x1d4	hot_temp_top	Hot tank top temperature (deg C; FF open, FE short)
+var	0x1d5	hot_temp_bottom	Hot tank bottom temperature (deg C; FF open, FE short)
+var	0x1d6	boil_timer	Seconds counted during boil detection
+var	0x1d7	heating_startup_timer	Startup timer (TEMPHOTCHNGTIME, 10 s units)
+var	0x1d8	extra_hot_timer	Extra-hot mode timeout (TEMPHOTCHNGTIME, 10 s units)
+var	0x1d9	heating_fault	Heating fault: 0x8A overtemp/diff, 0x8D sensor open, 0x8E, 0x8F sensor short
+# ---- cooling ----
+func	0xd174	task_cooling	Priority 4 task: cold tank thermostat driving the compressor, pull-down logging
+func	0xd3a2	cooling_init	Initialise cooling state
+func	0xd3b0	cooling_create_task	Create task_cooling (TCB 0x68)
+func	0xd3d4	cooling_start_task	Start task_cooling
+func	0xd3e0	cooling_stop_task	Stop task_cooling
+func	0xd3ec	cold_temp_average	Average of the two cold tank temperatures
+func	0xd41a	cooling_pulldown_tick	Per second: count pull-down time while measuring
+func	0xd430	cooling_idle_minute_tick	Per minute: count down idle time before pull-down measurement
+func	0xd452	cooling_set_demand	Set cooling demand/delay flag (0x208)
+func	0xd474	cooling_abort_pulldown	Cancel pull-down measurement (cold water drawn)
+func	0xd480	cooling_reset_pulldown	Reset pull-down measurement: 120 min idle wait
+func	0xd490	cooling_read_param	eeprom_read_param wrapper for cooling module
+var	0x1c3	cold_temp_a	Cold tank temperature from AN4/AN5
+var	0x1c4	cold_temp_b	Cold tank temperature from AN5
+var	0x1c5	cooling_flags	bit0 pull-down measuring, bit1 idle period elapsed
+var	0x1c6	pulldown_time_lo	Pull-down duration seconds (low byte)
+var	0x1c7	pulldown_time_hi	Pull-down duration seconds (high byte)
+var	0x1c8	cooling_fault	Cooling fault: 0x8D sensor open, 0x8F sensor short
+var	0x1c9	pulldown_start_temp	Temperature at start of pull-down
+var	0x1ca	pulldown_end_temp	Temperature at end of pull-down
+var	0x1cb	cooling_idle_minutes	Minutes of no cold dispensing before pull-down measurement (120)
+var	0x208	cooling_demand	Cooling requested but compressor delayed
+# ---- heater (RG0, burst-fire power control) ----
+func	0xe6ba	heater_init	Initialise heater state; power-up delay 120 s if FT flag set, else 30 s (0 with factory jumper); load ZCCYCLELENGTH
+func	0xe700	heater_is_ready	Return 1 when heater power-up delay has elapsed
+func	0xe70a	heater_set_power	Switch heater on at a power level (loads burst pattern from ROM 0xFC5C)
+func	0xe76a	heater_off	Switch heater off (level 0) and log usage
+func	0xe780	heater_maxon_minute_tick	Per minute: heater maximum on-time countdown; on expiry off + fault 0x84
+func	0xe7a4	heater_second_tick	Per second: heater usage counter, hold-off and power-up delay countdowns
+func	0xe7c4	heater_burst_tick	Every 10 ms: shift burst-fire pattern and drive RG0
+func	0xe83c	heater_holdoff_5s	Hold heater off for 5 s (used when compressor starts)
+func	0xe846	heater_set_fault	Latch heater fault code and disable heater output
+func	0xe86a	heater_get_powerup_delay	Return heater power-up delay remaining
+func	0xe870	heater_output_off	Drive RG0 low and update indicator
+func	0xe892	heater_load_maxon	Load heater maximum on-time from EEPROM (THEATERMAXON)
+var	0x1ba	heater_fault	Heater fault latch (0x84 = exceeded maximum on-time)
+var	0x1bb	heater_power_level	Heater power level (0 = off)
+var	0x1bc	heater_zc_cycle_len	ZCCYCLELENGTH: ticks per burst pattern bit
+var	0x1bd	heater_zc_counter	Countdown to next burst pattern bit
+var	0x1be	heater_maxon_timer	Heater maximum on-time countdown (minutes)
+var	0x1bf	heater_holdoff	Heater hold-off seconds (after compressor start)
+var	0x1c0	heater_powerup_delay	Heater power-up delay seconds
+var	0x1c1	heater_pattern_lo	Current burst-fire pattern (low byte, rotated each bit)
+var	0x1c2	heater_pattern_hi	Current burst-fire pattern (high byte)
+var	0x0f6	heater_output_enable	Heater output allowed (cleared on fault)
+# ---- compressor (RG3) ----
+func	0xe8ae	compressor_init	Stop compressor; set power-up restart delay (TCOMPOFFDELAY) unless factory jumper
+func	0xe8e6	compressor_start	Start compressor (returns 0x83 if restart delay still running)
+func	0xe926	compressor_stop	Stop compressor, start restart delay, log run time
+func	0xe98a	compressor_second_tick	Per second: compressor usage counter while running
+func	0xe99c	compressor_offdelay_10s_tick	Every 10 s: count down restart delay
+func	0xe9b2	compressor_minute_tick	Per minute: run time, maximum run time (TCOMPMAXON) then forced pause (TCOMPPAUSEMIN)
+func	0xea3e	compressor_set_fault	Latch compressor fault code and disable output
+func	0xea70	compressor_get_offdelay	Return remaining restart delay
+func	0xea76	compressor_read_param	eeprom_read_param wrapper for compressor module
+func	0xea80	compressor_set_offdelay	Set restart delay counter
+func	0xea8a	compressor_load_maxon	Load maximum run time from EEPROM (TCOMPMAXON)
+var	0x1e1	compressor_fault	Compressor fault latch (0x84 = exceeded maximum run time)
+var	0x1e2	compressor_offdelay_lo	Restart delay countdown (10 s units, low byte)
+var	0x1e3	compressor_offdelay_hi	Restart delay countdown (high byte)
+var	0x1e4	compressor_maxon_lo	Maximum run time countdown (minutes, low byte)
+var	0x1e5	compressor_maxon_hi	Maximum run time countdown (high byte)
+var	0x1e6	compressor_run_minutes	Minutes run in current cycle
+var	0xee6	compressor_start_flag	Cleared when compressor starts
+var	0x0f4	compressor_output_enable	Compressor output allowed (cleared on fault)
+var	0x0f7	temp_filter_last	Per-ADC-channel last accepted temperature [8] (0x81 = none yet)
+# ---- fan, device / dryer sensors, fault inputs (task 0xd794) ----
+func	0xd794	task_fan_and_safety	Priority 4 task (500 ms): condenser fan (RH5), device sensor AN6, dryer over-temp AN7, fault inputs
+func	0xd8ea	fan_init	Initialise fan timers and sensor faults
+func	0xd8fc	fan_create_task	Create task_fan_and_safety (TCB 0x92)
+func	0xd926	fan_start_runon	Start fan run-on after compressor stop (TFANOPERATING minutes)
+func	0xd936	fan_start_heater_runon	Run fan 300 s after heater switches on
+func	0xd942	fan_second_tick	Per second: count down fan run-on timers
+func	0xd96e	fan_set_runon_minutes	Set fan run-on time in minutes
+func	0xd998	lamp_filter_presence_check	UV lamp switch (RJ0) / filter switch (RC3): on removal stop loads, show INSERT screen; on refit ask NEW/OLD
+func	0xda64	loads_stop_and_restart	Stop compressor and heater, restart heating/cooling tasks, stop dispensing
+func	0xda78	fan_read_param	EEPROM read wrapper for fan module
+var	0x1cc	fan_runon_lo	Fan run-on countdown seconds after compressor stop (0xFFFF = idle)
+var	0x1cd	fan_runon_hi	Fan run-on countdown (high byte)
+var	0x1ce	fan_heater_runon_lo	Fan run-on countdown after heater start (0xFFFF = idle)
+var	0x1cf	fan_heater_runon_hi	Fan heater run-on countdown (high byte)
+var	0x1d0	device_sensor_fault	AN6 device sensor fault (0x8D open, 0x8F short)
+var	0x1d1	dryer_sensor_fault	AN7 dryer sensor fault (0x8D open, 0x8F short)
+var	0x1d2	presence_flags	bit0 filter removed (RC3), bit1 UV lamp removed (RJ0)
+# ---- UV lamp (task 0xda82) ----
+func	0xda82	task_uv_lamp	Priority 2 task: UV sterilising lamp cycles, filament warm-up, lamp verification (RJ1)
+func	0xdbe6	uv_init	Initialise UV lamp state
+func	0xdc08	uv_create_task	Create task_uv_lamp (TCB 0x7a)
+func	0xdc32	uv_start_keep_cycle	Start a UV cycle with TUVKEEP on-time
+func	0xdc44	uv_check_cold_abnormal	Force UV cycle if cold water above TABNORMALCOLDHIGH
+func	0xdc96	uv_verify_100ms_tick	Every 100 ms: count down lamp verify delay
+func	0xdca2	uv_second_tick	Per second: UV on-time, verify-off, filament and verify-period countdowns
+func	0xdcce	uv_minute_tick	Per minute: UV period countdown, long-verify timer, usage counters
+func	0xdd1a	uv_read_param	eeprom_read_param wrapper for UV module
+func	0xdd24	uv_cfg_application	APPLICATION setting (copy in UV module)
+func	0xdd34	uv_set_period	Set UV period countdown (and 10-minute sub-counter)
+func	0xdd3e	uv_reload_period	Reload UV period from TUVPERIOD_T3_26
+func	0xdd46	uv_reload_verify_delay	Reload lamp verify delay from TUVOPERATING_T3_26 (x10)
+func	0xdd52	uv_load_on_time	Load UV on-time from given parameter
+func	0xf8b2	alarm_init	Clear UV status and alarm code
+func	0xf8bc	uv_lamp_on	Switch UV lamp on (RF6) if UV fitted
+func	0xf8da	uv_lamp_off	Switch UV lamp off (RF6); log usage and lamp-fail counters
+func	0xf91a	uv_is_available	UV lamp fitted, not failed and fault input not tripped
+func	0xf93c	uv_count_usage	Per second: UV lamp usage counter while lit
+func	0xfc40	uv_service_clear	Clear UV service override
+func	0xfc48	uv_service_on	Drive RF5 high (UV service/test) and clear override
+func	0xfc52	uv_service_off	Drive RF5 low and set override flag (0x80)
+var	0x186	uv_flags	bit0 UV cycle active, bit3 forced by abnormal cold temperature
+var	0x187	uv_period_counter	UV period countdown (units of 10 minutes)
+var	0x188	uv_period_subcounter	Minutes within current 10-minute UV period unit
+var	0x189	uv_filament_timer	Filament warm-up countdown (TMINFILAMENTS_T6, seconds)
+var	0x18a	uv_on_timer	UV lamp on-time countdown (seconds)
+var	0x18b	uv_verify_delay	Lamp verify delay (100 ms units)
+var	0x18c	uv_on_time	UV on-time loaded for this cycle
+var	0x18d	uv_verify_off_timer	Countdown before lamp-off verification (TUVVERIFYOFF)
+var	0x18e	uv_verify_retries	Lamp verification retries left (3)
+var	0x18f	uv_long_verify_timer	Long verification countdown (TUVLONGVERIFY, minutes)
+var	0x190	uv_verify_period_timer	Verification retry spacing (TUVVERIFYOFFPERIOD)
+var	0x191	uv_cold_abnormal_limit	TABNORMALCOLDHIGH threshold
+var	0x1ff	uv_service_override	UV service override flag (0x80 = override active)
+var	0xef2	uv_alarm_code	UV alarm: 0x82 UV lamp removed, 0x8B UV lamp not lit, 0x90 UV lamp fault / cold abnormal
+var	0xef3	uv_status	bit0 UV off/disabled, bit1 UV lamp failed
+# ---- EEPROM parameter layer ----
+func	0xd668	eeprom_read_raw	Read EEPROM byte at address
+func	0xd58c	param_table_lookup	Find parameter in ROM table (0xDD62) and return a field
+func	0xd5a8	param_read_min	Read parameter minimum from EEPROM (address + 0x96)
+func	0xd5ca	param_read_max	Read parameter maximum from EEPROM (address + 0x4B)
+func	0xd5ec	param_write	Write parameter to EEPROM; updates RAM copies of SYSTEMCONFIG2-5
+func	0xd640	param_write_max	Write parameter maximum to EEPROM (address + 0x4B)
+func	0xd654	param_write_min	Write parameter minimum to EEPROM (address + 0x96)
+func	0xd4a4	params_verify	Check parameter values against EEPROM min/max at startup (inferred)
+# ---- dispensing (task 0xaa56) and portion control ----
+func	0xaa56	task_dispense	Priority 3 task: sequence cold/hot dispensing valves, inlet refill, hot dispense time limit
+func	0xac34	dispense_init	Initialise dispensing state
+func	0xac46	dispense_create_task	Create task_dispense (TCB 0x74)
+func	0xac70	dispense_cold_request	Request cold water dispensing
+func	0xac78	dispense_hot_request	Request hot water dispensing
+func	0xac80	dispense_stop_all	Request stop of all dispensing and cancel portion
+func	0xac92	dispense_stop_all_b	dispense_stop_all variant
+func	0xac9a	dispense_stop_all_c	dispense_stop_all variant
+func	0xaca2	dispense_hot_allow	Allow hot dispensing (hot tank up to temperature)
+func	0xacaa	dispense_hot_block	Block hot dispensing (hot tank too cold)
+func	0xacb0	dispense_hot_is_allowed	Return hot-dispense-allowed flag
+func	0xacb6	dispense_hot_is_active	Return hot dispensing active
+func	0xacbe	dispense_cold_is_active	Return cold dispensing active
+func	0xacc6	dispense_100ms_tick	Every 100 ms: hot dispense time limit and portion countdown
+func	0xacd2	portion_calc_cold_cup	Compute cold cup portion time (QTYCOLDWATER)
+func	0xacde	dispense_cold_cup	Start a measured cold cup
+func	0xace2	portion_calc_mixed	Compute hot/cold split to reach a target temperature
+func	0xae44	portion_tick	Every 100 ms: run portion phases (cold, hot, second cold) then stop
+func	0xaeec	dispense_cool_cup	Start a measured cool (mixed) cup: TNORMALCOOLCUTOUT, QTYCOOLWATER
+func	0xaefa	dispense_warm_cup	Start a measured warm (mixed) cup: TNORMALWARMCUTOUT, QTYWARMWATER
+func	0xaf08	portion_calc_hot_cup	Compute hot cup portion time (QTYHOTWATER)
+func	0xaf3e	dispense_hot_cup	Start a measured hot cup (0x80 if not possible)
+func	0xaf54	portion_calc_jug	Compute jug portion time (QTYJUGWATER)
+func	0xaf64	dispense_jug	Start a measured jug
+func	0xaf68	portion_calc_flow	Flow factor from WATERFLOW (x100/60)
+func	0xaf9e	portion_scale	Multiply/divide helper for portion timing
+func	0xafc8	dispense_delay	Set dispense task state and delay
+func	0xb006	portion_clear	Clear portion timers and mode
+func	0xb016	portion_start_cold	Start portion in cold mode and request cold water
+func	0xb022	dispense_read_param	eeprom_read_param wrapper for dispensing module
+func	0xb040	dispense_os_delay	OSDelay wrapper for dispensing task
+func	0xb054	dispense_close_inlet_after	Wait close delay then close inlet valve
+var	0x178	dispense_active	bit0 cold dispensing, bit1 hot dispensing
+var	0x179	dispense_request	bit0 cold start, bit1 hot start, bit2 cold stop, bit3 hot stop, bit4 both
+var	0x17a	hot_dispense_timer	Hot dispense time limit countdown (THOTWATERDISPMIN, 100 ms units)
+var	0x17b	hot_dispense_allowed	1 = hot tank warm enough to dispense
+var	0x17c	dispense_task_state	Dispense task state (1 idle, 4 waiting for UV, ...)
+var	0x17d	dispense_uv_wait_lo	Wait for UV cycle before cold dispense (low byte, 1000 ticks)
+var	0x17e	dispense_uv_wait_hi	Wait for UV cycle (high byte)
+var	0x17f	portion_mode	0 none, 1 cold phase, 2 second cold phase, 3 hot phase
+var	0x180	portion_cold_lo	Portion cold phase time (100 ms units, low byte)
+var	0x181	portion_cold_hi	Portion cold phase time (high byte)
+var	0x182	portion_cold2_lo	Portion second cold phase time (low byte)
+var	0x183	portion_cold2_hi	Portion second cold phase time (high byte)
+var	0x184	portion_hot_lo	Portion hot phase time (low byte)
+var	0x185	portion_hot_hi	Portion hot phase time (high byte)
+var	0x029	portion_flow_lo	Flow factor (low byte)
+var	0x02a	portion_flow_hi	Flow factor (high byte)
+var	0x02b	portion_target_temp	Target temperature for mixed portion
+var	0x02c	portion_cold_temp	Cold temperature used for mix calculation
+var	0x02d	portion_hot_temp	Hot temperature used for mix calculation
+# ---- statistics / usage counters ----
+func	0xec76	stats_load	Load usage counters (RAM 0xB2..) and byte statistics from EEPROM at startup
+func	0xecee	stats_read_counter_rom	Read a counter descriptor from ROM table
+func	0xed38	stat_counter_inc	Increment 32-bit usage counter [id] in RAM
+func	0xed58	stat_counter_save	Save 32-bit usage counter [id] to EEPROM
+func	0xed94	stat_byte_save	Save byte statistic [id] (0xF2+id) to EEPROM
+func	0xede6	stats_eeprom_write	EEPROM block write helper for statistics
+# ---- C18 runtime library ----
+func	0xf3ce	__divs16	C18 runtime: signed 16-bit divide (AARG / BARG)
+func	0xfbbc	__divu16	C18 runtime: unsigned 16-bit divide, remainder in math_rem
+func	0xf4dc	__mul16	C18 runtime: 16 x 16 bit multiply
+func	0xf592	strcpy_rom2ram	C18 runtime: copy NUL-terminated string
+func	0xf278	lcd_draw_big_glyph	Draw large 51-byte glyphs from ROM 0x9010 on the LCD
+var	0x000	math_sign	C18 math scratch: result sign
+var	0x001	math_flags	C18 math flags (bit4 overflow)
+var	0x004	math_rem_lo	C18 math: remainder (low byte)
+var	0x005	math_rem_hi	C18 math: remainder (high byte)
+var	0x006	math_res0	C18 math: product/result byte 0
+var	0x007	math_res1	C18 math: product/result byte 1
+var	0x008	math_aarg_lo	C18 math: argument A / quotient (low byte)
+var	0x009	math_aarg_hi	C18 math: argument A / quotient (high byte)
+var	0x00d	math_barg_lo	C18 math: argument B / divisor (low byte)
+var	0x00e	math_barg_hi	C18 math: argument B / divisor (high byte)
+var	0x014	c18_tmp0	C18 .tmpdata compiler temporary (shared, saved by ISR)
+var	0x015	c18_tmp1	C18 .tmpdata compiler temporary
+var	0x016	c18_tmp2	C18 .tmpdata compiler temporary
+var	0x017	c18_tmp3	C18 .tmpdata compiler temporary
+var	0x018	c18_tmp4	C18 .tmpdata compiler temporary
+var	0x019	c18_tmp5	C18 .tmpdata compiler temporary
+var	0x024	local0	Overlaid local variable (shared by many functions)
+var	0x025	local1	Overlaid local variable (shared by many functions)
+var	0x026	local2	Overlaid local variable (shared by many functions)
+var	0x027	local3	Overlaid local variable (shared by many functions)
+var	0x028	local4	Overlaid local variable (shared by many functions)
+# ---- software real-time clock / wake-up timers ----
+func	0xa312	clock_draw	Draw the clock (big digits or text style per SYSTEMCONFIG3 bit7)
+func	0xa414	draw_temperature_screen	Draw temperatures (converted to Fahrenheit unless SYSTEMCONFIG3 bit2)
+func	0xa530	clock_display_off	Stop showing the clock
+func	0xa538	clock_blink_update	Toggle colon blink and redraw clock
+func	0xa588	clock_minute_tick	Per minute: advance clock, daily counters, check wake-up timers 1 and 2
+func	0xa656	clock_get_day	Return day of week
+func	0xa65c	clock_set_day	Set day of week
+func	0xa666	clock_copy_to_edit	Copy current time into the edit buffer
+func	0xa678	clock_edit_load_wake1	Load wake-up time 1 (WKUPHOUR1/WKUPMINUTE1) into edit buffer
+func	0xa6a4	clock_edit_load_wake2	Load wake-up time 2 (WKUPHOUR2/WKUPMINUTE2) into edit buffer
+func	0xa6d0	clock_edit_hour12	Edit buffer hour in 12-hour format
+var	0x1da	clock_day	Day of week (0..6)
+var	0x1db	clock_hour	Hour (0..23)
+var	0x1dc	clock_minute	Minute (0..59)
+var	0x1dd	clock_pm	0 = AM, 1 = PM
+var	0x1de	clock_colon_blink	Colon blink phase
+var	0x1df	clock_display_on	Clock currently shown
+var	0x1e0	clock_display_blocked	Clock display suppressed by another screen
+var	0x1ec	clock_edit_day	Clock edit buffer: day
+var	0x1ed	clock_edit_hour	Clock edit buffer: hour
+var	0x1ee	clock_edit_minute	Clock edit buffer: minute
+var	0x1ef	clock_edit_ampm	Clock edit buffer: 0 AM, 1 PM, 2 24-hour
+# ---- serial service console (EUSART2, 9600 baud) ----
+func	0x7628	uart2_rx_isr	EUSART2 receive: echo, collect line (max 11 chars), hash command word, signal task on CR
+func	0x76ac	uart2_puts_rom	Send NUL-terminated ROM string on EUSART2
+func	0x76d8	uart2_puts_ram	Send NUL-terminated RAM string on EUSART2
+func	0x75e2	serial_init	Create serial line semaphore, reset receive state
+func	0x75fe	serial_create_task	Create task_serial_protocol (TCB 0x62)
+func	0x6d6a	serial_report_param	Print a parameter's name, value, maximum and minimum
+func	0x6dc0	serial_read_counter_desc	Read usage-counter descriptor (name) from ROM table
+func	0x6df8	serial_cmd_reset	Software reset
+func	0x6dfc	serial_parse_index_value_args	Parse "<index>,<value>": index via serial_parse_index_arg (must be < 75), value via atol into local0
+func	0x0079ea	serial_push_sem	Push serial semaphore ECB address (0x9a)
+var	0x03e	serial_param_index	Parameter/counter index parsed from command
+var	0x03f	uart2_rx_byte	Last received byte (ISR)
+var	0x09a	sem_serial_line	Salvo semaphore ECB signalled when a command line is complete
+var	0x168	uart2_rx_flags	bit0 receive enabled, bit1 inside command word
+var	0x169	uart2_rx_count	Characters received in current line
+var	0x16a	uart2_tx_char	Character being transmitted
+var	0x16b	serial_cmd_hash	Hash of received command word (selects command)
+var	0x16c	uart2_rx_buffer	Receive line buffer (12 bytes)
+var	0x16e	uart2_rx_buffer_2	Receive buffer byte 2 (non-zero = text after a 2-letter command, i.e. argument present)
+var	0x16f	uart2_rx_buffer_3	Receive buffer byte 3 (start of numeric argument, parsed with atol)
+var	0x1ac	serial_value32	32-bit value parsed from command (0x1AC..0x1AF)
+# ---- keypad / user interface ----
+func	0x485a	keypad_scan	Scan 3x3 key matrix (rows RB4/RE6/RE7, columns RB5-RB7); returns 7-bit key mask
+func	0x2c22	task_ui	Priority 2 task: keypad debounce, key press/release dispatch, buzzer, screen refresh
+func	0x2d86	ui_on_key_press	Handle newly pressed keys: fault clearing, menu entry, cup/jug dispensing
+func	0x323c	ui_on_key_release	Handle released keys
+func	0x2d3c	ui_hot_side_ok	Return 1 if no hot-side faults (heating, hot valve, inlet, heater)
+func	0x2d56	ui_cold_side_ok	Check cold-side faults (cooling, alarm, cold valve, inlet, compressor)
+func	0x44fe	ui_10ms_tick	Every 10 ms: key hold timers
+func	0x4844	ui_100ms_tick	Every 100 ms: UI countdown
+func	0x4828	ui_10s_tick	Every 10 s: refresh idle screen / clock
+func	0x4550	ui_second_tick	Per second: UI timeouts and screen updates
+func	0x4264	ui_init	Initialise UI state, LEDs and display
+func	0x44d4	ui_create_task	Create task_ui (TCB 0x6e)
+func	0x331e	ui_update	Periodic screen/LED update from the UI task loop
+func	0x3b12	ui_refresh_screen	Redraw current screen (called when refresh timer expires)
+func	0x0f94	menu_enter	Open the menu (table at ROM 0xE49E) and call its enter callback
+func	0x0f9e	menu_call_enter_cb	Call menu enter callback (menu_cb_enter)
+func	0x1038	menu_key_back	Back key (0x40) in menus: call menu_cb_back
+func	0x1042	menu_call_back_cb	Call menu_cb_back
+func	0x106e	menu_key_up	Up key (0x01) in menus: call menu_cb_up
+func	0x1078	menu_call_up_cb	Call menu_cb_up (default: previous item)
+func	0x1096	menu_key_down	Down key (0x10) in menus: call menu_cb_down
+func	0x10a0	menu_call_down_cb	Call menu_cb_down (default: next item)
+func	0x10bc	menu_key_other	Other keys in menus: call menu_cb_key
+func	0x10c6	menu_call_key_cb	Call menu_cb_key
+func	0x10dc	menu_timer_tick	Count down menu timer; on expiry call menu_cb_timeout
+func	0x10f0	menu_call_timeout_cb	Call menu_cb_timeout
+func	0x110e	menu_call_aux_cb	Call menu_cb_aux
+var	0x100	ui_screen	Current screen id (0 home, 0x14/0x1F menus, 0x1E service, ...)
+var	0x101	ui_return_screen	Screen to return to
+var	0x104	ui_screen_timeout	Seconds before returning to home screen (60)
+var	0x105	ui_backlight_timeout	Seconds of backlight after a key press (120)
+var	0x108	ui_menu_active	Non-zero while a menu/setting is open
+var	0x10c	keys_current	Debounced key state (bit mask)
+var	0x10f	buzzer_pattern	Buzzer bit pattern (bit7 drives RB3, shifted each step)
+var	0x110	keys_sample	Raw key sample during debounce
+var	0x111	ui_refresh_timer	Ticks until next screen refresh / buzzer step
+var	0x112	keys_changed	Keys changed since last scan (debounce counter)
+var	0x119	ui_countdown_100ms	UI countdown (100 ms units)
+var	0x11d	key_cold_hold_lo	Cold key hold timer (10 ms units, low byte)
+var	0x11e	key_cold_hold_hi	Cold key hold timer (high byte)
+var	0x11f	key_hot_hold_lo	Hot key hold timer (10 ms units, low byte)
+var	0x120	key_hot_hold_hi	Hot key hold timer (high byte)
+var	0x123	ui_clock_suppressed	Do not draw clock on idle screen
+var	0x124	menu_mode	Menu mode (0 none, 1/3/4 = menu variants)
+var	0x125	menu_table_ptr_lo	Pointer into menu definition table (ROM 0xE49E, low byte)
+var	0x126	menu_table_ptr_hi	Pointer into menu definition table (high byte)
+var	0x127	menu_item	Selected menu item index
+var	0x128	menu_item_count	Number of items in current menu
+var	0x129	menu_edit_mode	Non-zero while editing a value
+var	0x12a	menu_flag	Menu flag returned by helper 0x033c
+var	0x12b	menu_timer_lo	Menu timer countdown (low byte)
+var	0x12c	menu_timer_hi	Menu timer countdown (high byte)
+var	0x12d	menu_timer_reload_lo	Menu timer reload / divisor (low byte)
+var	0x12e	menu_timer_reload_hi	Menu timer reload / divisor (high byte)
+var	0x12f	menu_timer_enabled	Menu timer running
+var	0x130	menu_text_a_lo	Text pointer for message widget line A (low byte)
+var	0x131	menu_text_a_hi	Text pointer line A (high byte)
+var	0x132	menu_text_b_lo	Text pointer for message widget line B (low byte)
+var	0x133	menu_text_b_hi	Text pointer line B (high byte)
+var	0x134	menu_cb_enter	Menu callback pointer: enter/initialise (2 bytes)
+var	0x136	menu_cb_back	Menu callback pointer: back key 0x40 (2 bytes)
+var	0x138	menu_cb_up	Menu callback pointer: up key 0x01 (2 bytes)
+var	0x13a	menu_cb_down	Menu callback pointer: down key 0x10 (2 bytes)
+var	0x13c	menu_cb_key	Menu callback pointer: other keys (2 bytes)
+var	0x13e	menu_cb_timeout	Menu callback pointer: menu timer expired (2 bytes)
+var	0x140	menu_cb_aux	Menu callback pointer: auxiliary (2 bytes)
+# ---- UI internals (some inferred) ----
+var	0x102	ui_substate	Screen sub-state (inferred)
+var	0x103	ui_wake_pending	Key pressed while asleep; wake on release (inferred)
+var	0x106	ui_heater_indicator	Heater status indicator state (set by heater on/off)
+var	0x107	ui_compressor_indicator	Compressor status indicator state (set by compressor on/off)
+var	0x109	ui_service_hold_counter	Counts UI cycles while keys 0x20+0x40 are held; at 0 opens SERVICE menu
+var	0x10a	ui_header_text	Text id for header line
+var	0x10b	ui_message_timer	Message display timer (inferred)
+var	0x10d	ui_dispense_state	Dispensing screen state
+var	0x10e	ui_hold_counter	Key hold counter (inferred)
+var	0x113	ui_disp_hot_top	Displayed hot top temperature (smoothed)
+var	0x114	ui_disp_hot_bottom	Displayed hot bottom temperature (smoothed)
+var	0x115	ui_disp_cold_a	Displayed cold temperature A (smoothed)
+var	0x116	ui_disp_cold_b	Displayed cold temperature B (smoothed)
+var	0x117	ui_temp_scratch	Temperature scratch for display smoothing
+var	0x11a	ui_alarm_index	Alarm/message index on screen (inferred)
+var	0x11b	ui_blink_phase	Screen blink phase (bit0)
+var	0x11c	ui_clock_block_tmp	Temporary clock-blocked flag
+var	0x121	ui_temp_change_timer	Countdown for temperature change screen (inferred)
+var	0x122	ui_extra_hot_prev	Previous extra-hot state
+var	0x142	ui_layout_0	Screen layout constant (x/y position)
+var	0x143	ui_layout_1	Screen layout constant
+var	0x144	ui_layout_2	Screen layout constant
+var	0x146	ui_layout_4	Screen layout constant
+var	0x148	ui_layout_6	Screen layout constant
+var	0x14a	ui_layout_8	Screen layout constant
+var	0x14c	progress_bar_x	Progress bar x position
+var	0x14d	progress_bar_width	Progress bar width
+var	0x14e	progress_bar_y	Progress bar y position
+var	0x14f	progress_bar_value	Progress bar fill
+var	0x151	anim_flag	Animation flag (bitmap module 0xB6A6)
+var	0x152	anim_frame	Animation frame / start column
+var	0x153	anim_end	Animation end column
+var	0x155	anim_pos	Animation position (bitmap module)
+var	0x156	anim_index	Animation glyph index
+var	0x194	menu_value_lo	Value being edited in menu (low byte)
+var	0x195	menu_value_hi	Value being edited in menu (high byte)
+var	0x196	menu_value_min_lo	Edit minimum (low byte, inferred)
+var	0x197	menu_value_min_hi	Edit minimum (high byte, inferred)
+var	0x198	menu_value_max_lo	Edit maximum (low byte, inferred)
+var	0x199	menu_value_max_hi	Edit maximum (high byte, inferred)
+var	0x19a	menu_value_step_lo	Edit step (low byte, inferred)
+var	0x19b	menu_value_step_hi	Edit step (high byte, inferred)
+var	0x19d	menu_tmp_a	Menu scratch
+var	0x19f	menu_page	Menu page (inferred)
+var	0x1a0	menu_day_edit	Day-of-week being edited
+# ---- display primitives / misc ----
+var	0x1e7	lcd_text_width	Text width accumulator for layout
+var	0x1e8	lcd_text_flag	Text layout flag
+var	0x1e9	lcd_text_maxwidth	Maximum text width seen
+var	0x1ea	text_x_adjust	Text x adjustment
+var	0x1eb	text_width_saved	Saved text width
+var	0x1f0	lcd_delay_counter	lcd_delay loop counter
+var	0x1f2	lcd_page_counter	Page loop counter for screen clear
+var	0x1f4	popup_index	Popup/icon index (module 0xE23A, inferred)
+var	0x1f5	popup_arg	Popup argument
+var	0x1f6	popup_flag	Popup flag
+var	0x204	popup_icon	Popup icon id (init 0xBD)
+var	0xe00	text_flags	Text style: bits1-2 align (2 left, 4 right, 6 centre), 5-6 fill, 7 inverse
+var	0xe02	text_fill_width	Fill width
+var	0xe03	text_row	Text row (LCD page)
+var	0xe04	text_x	Text start x
+var	0xe05	text_width	Rendered text width
+var	0xe06	text_width2	Second width measurement
+var	0xe07	text_x_end	Text end x
+var	0xe08	text_column	Column counter
+var	0xe09	text_char	Current character
+var	0xe0a	printf_fmt_lo	printf format pointer (low byte)
+var	0xe0b	printf_fmt_hi	printf format pointer (high byte)
+var	0xe0c	printf_out_lo	printf output pointer (low byte)
+var	0xe0d	printf_out_hi	printf output pointer (high byte)
+var	0xe0e	printf_args_lo	printf argument pointer (low byte)
+var	0xe0f	printf_args_hi	printf argument pointer (high byte)
+var	0xe10	printf_tmp_lo	printf scratch
+var	0xe11	printf_tmp_hi	printf scratch
+var	0xe12	text_render_flag	Text render flag
+var	0xee2	compressor_offdelay_b	Restart delay copy used by compressor_stop
+var	0xee3	compressor_offdelay_b_hi	Restart delay copy (high byte)
+var	0x1b0	cinit_tmp	_do_cinit scratch (0x1B0..0x1B9)
+var	0x03c	serial_ptr_lo	Serial parser pointer (low byte)
+var	0x03d	serial_ptr_hi	Serial parser pointer (high byte)
+var	0x02e	portion_tmp0	Portion calculation scratch
+var	0x030	portion_tmp1	Portion calculation scratch
+# ---- text engine functions ----
+func	0x9316	text_draw_word	Draw a word from the word table (with language/screen header)
+func	0x93c6	text_draw_char	Draw one character
+func	0x93ee	text_layout_line	Compute alignment and fill for a text line
+func	0x94d8	text_draw_string	Render a string with alignment, newline, tab handling
+func	0x95f2	printf_handle_conv	printf: handle %d/%b conversion
+func	0x96c0	lcd_printf	printf-style formatted output to the LCD
+func	0xc226	fmt_byte	Format byte as decimal (printf helper)
+func	0xc328	fmt_int	Format 16-bit integer as decimal (printf helper)
+func	0xcfee	lcd_clear	Clear the LCD (all pages)
+# ---- high bytes / remaining compiler temporaries ----
+var	0x135	menu_cb_enter_hi	High byte of menu_cb_enter
+var	0x137	menu_cb_back_hi	High byte of menu_cb_back
+var	0x139	menu_cb_up_hi	High byte of menu_cb_up
+var	0x13b	menu_cb_down_hi	High byte of menu_cb_down
+var	0x13d	menu_cb_key_hi	High byte of menu_cb_key
+var	0x13f	menu_cb_timeout_hi	High byte of menu_cb_timeout
+var	0x141	menu_cb_aux_hi	High byte of menu_cb_aux
+var	0x061	os_tmp_tcb_ptr_hi	High byte of os_tmp_tcb_ptr
+var	0x099	OScTcbP_hi	High byte of OScTcbP
+var	0x0ab	OSeligQTail_hi	High byte of OSeligQTail
+var	0x0ad	OSeligQP_hi	High byte of OSeligQP
+var	0x0af	OSdelayQP_hi	High byte of OSdelayQP
+var	0x002	math_tmp2	C18 math scratch
+var	0x003	math_tmp3	C18 math scratch
+var	0x00a	math_aarg_b2	C18 math: argument A byte 2
+var	0x00b	math_aarg_b3	C18 math: argument A byte 3
+var	0x00c	math_barg_b0	C18 math: argument B low extension
+var	0x00f	math_barg_b3	C18 math: argument B byte 3
+var	0x010	math_tmp10	C18 math scratch
+var	0x011	math_tmp11	C18 math scratch
+var	0x012	math_tmp12	C18 math scratch
+var	0x013	math_tmp13	C18 math scratch
+var	0x01a	c18_tmp6	C18 .tmpdata compiler temporary
+var	0x01b	c18_tmp7	C18 .tmpdata compiler temporary
+var	0x01c	c18_tmp8	C18 .tmpdata compiler temporary
+var	0x01d	c18_tmp9	C18 .tmpdata compiler temporary
+var	0x01e	c18_tmp10	C18 .tmpdata compiler temporary
+var	0x01f	c18_tmp11	C18 .tmpdata compiler temporary
+var	0x020	c18_tmp12	C18 .tmpdata compiler temporary
+var	0x021	c18_tmp13	C18 .tmpdata compiler temporary
+var	0x022	c18_tmp14	C18 .tmpdata compiler temporary
+var	0x023	c18_tmp15	C18 .tmpdata compiler temporary
+var	0x031	portion_tmp1_hi	Portion calculation scratch
+var	0x02f	portion_tmp0_hi	Portion calculation scratch
+# ---- usage counters (names from ROM table 0xDF67) ----
+var	0x0b2	stat_HWS	Counter 0 HWS: hot water valve open time, seconds (32-bit)
+var	0x0b6	stat_CWS	Counter 1 CWS: cold water valve open time, seconds
+var	0x0ba	stat_IWS	Counter 2 IWS: inlet valve open time, seconds
+var	0x0be	stat_CD	Counter 3 CD: cold dispenses
+var	0x0c2	stat_HD	Counter 4 HD: hot dispenses
+var	0x0c6	stat_EH	Counter 5 EH: extra-hot activations
+var	0x0ca	stat_FM	Counter 6 FM: minute counter kept by UV module (when not in UV service override)
+var	0x0ce	stat_UVS	Counter 7 UVS: UV lamp lit time, seconds
+var	0x0d2	stat_UI	Counter 8 UI: completed UV lamp cycles
+var	0x0d6	stat_H78	Counter 9 H78: time to heat from 70 to 80 deg C, seconds (last measurement)
+var	0x0da	stat_CG	Counter 10 CG: cooling pull-down time, seconds (last measurement)
+var	0x0de	stat_HSS	Counter 11 HSS: heater on time, seconds
+var	0x0e2	stat_CSS	Counter 12 CSS: compressor on time, seconds
+var	0x0e6	stat_GUV	Counter 13 GUV: days since UV lamp change
+var	0x0ea	stat_GFI	Counter 14 GFI: days since filter change
+var	0x0ee	stat_FWU	Counter 15 FWU: inlet open seconds since filter change (filter usage)
+var	0x0f2	stat_CMM	Byte stat CMM: longest compressor run (minutes)
+var	0x0f3	stat_CGT	Byte stat CGT: temperature drop of last pull-down
+# ---- menu system (from menu tables 0xE49E and callback analysis) ----
+func	0x0098	menu_cb_noop	Menu/screen handler (callback analysis)
+func	0x009a	menu_enter_power_down_on_enter	Menu/screen handler (callback analysis)
+func	0x00b2	menu_enter_power_down	Menu/screen handler (callback analysis)
+func	0x00ca	menu_beep_on_key	Menu/screen handler (callback analysis)
+func	0x00ec	menu_beep_on_key_on_enter	Menu/screen handler (callback analysis)
+func	0x010a	menu_child_lock_on_enter	Menu/screen handler (callback analysis)
+func	0x011e	menu_child_lock	Menu/screen handler (callback analysis)
+func	0x013a	menu_spout_light_on_enter	Menu/screen handler (callback analysis)
+func	0x0148	menu_spout_light	Menu/screen handler (callback analysis)
+func	0x016a	menu_clock_view_on_enter	Menu/screen handler (callback analysis)
+func	0x0178	menu_clock_view	Menu/screen handler (callback analysis)
+func	0x019a	menu_units_on_enter	Menu/screen handler (callback analysis)
+func	0x01a8	menu_units	Menu/screen handler (callback analysis)
+func	0x01de	menu_restore_factory_confirm2	Menu/screen handler (callback analysis)
+func	0x02fa	menu_restore_factory_on_enter	Menu/screen handler (callback analysis)
+func	0x0318	menu_restore_factory	Menu/screen handler (callback analysis)
+func	0x0334	menu_reset_confirm2	Menu/screen handler (callback analysis)
+func	0x0342	menu_reset_on_enter	Menu/screen handler (callback analysis)
+func	0x0360	menu_reset	Menu/screen handler (callback analysis)
+func	0x037c	menu_language	Menu/screen handler (callback analysis)
+func	0x03cc	menu_language_on_enter	Menu/screen handler (callback analysis)
+func	0x03e2	menu_language_on_back	Menu/screen handler (callback analysis)
+func	0x04a0	menu_energy_saving_mode_on_enter	Menu/screen handler (callback analysis)
+func	0x04cc	menu_energy_saving_mode_on_up	Menu/screen handler (callback analysis)
+func	0x04e2	menu_energy_saving_mode_on_down	Menu/screen handler (callback analysis)
+func	0x04f6	menu_energy_saving_mode	Menu/screen handler (callback analysis)
+func	0x0596	menu_power_down_mode_on_enter	Menu/screen handler (callback analysis)
+func	0x05a6	menu_power_down_mode_on_up	Menu/screen handler (callback analysis)
+func	0x05bc	menu_power_down_mode_on_down	Menu/screen handler (callback analysis)
+func	0x05d0	menu_power_down_mode	Menu/screen handler (callback analysis)
+func	0x0634	menu_clock_day_on_enter	Menu/screen handler (callback analysis)
+func	0x0642	menu_clock_day_on_down	Menu/screen handler (callback analysis)
+func	0x0656	menu_clock_day_on_up	Menu/screen handler (callback analysis)
+func	0x066c	menu_clock_day	Menu/screen handler (callback analysis)
+func	0x0788	menu_clock_time_on_down	Menu/screen handler (callback analysis)
+func	0x0794	menu_clock_time_on_up	Menu/screen handler (callback analysis)
+func	0x07a0	screen_clock_edit_hour_on_down	Menu/screen handler (callback analysis)
+func	0x07a8	screen_clock_edit_hour_on_up	Menu/screen handler (callback analysis)
+func	0x07b0	screen_clock_edit_hour_confirm2	Menu/screen handler (callback analysis)
+func	0x07b8	screen_clock_edit_hour_edit_on_down	Menu/screen handler (callback analysis)
+func	0x07c0	screen_clock_edit_hour_edit_on_up	Menu/screen handler (callback analysis)
+func	0x07c8	screen_clock_edit_hour_edit_on_back	Menu/screen handler (callback analysis)
+func	0x07fe	menu_clock_time_on_enter	Menu/screen handler (callback analysis)
+func	0x0806	screen_clock_edit_hour_on_back	Menu/screen handler (callback analysis)
+func	0x0814	menu_clock_time	Menu/screen handler (callback analysis)
+func	0x0838	screen_value_edit_setup_on_down	Menu/screen handler (callback analysis)
+func	0x0846	screen_value_edit_setup_on_up	Menu/screen handler (callback analysis)
+func	0x0854	screen_value_edit_setup_b_on_down	Menu/screen handler (callback analysis)
+func	0x085c	screen_value_edit_setup_b_on_up	Menu/screen handler (callback analysis)
+func	0x0864	fn_087a_on_back	Menu/screen handler (callback analysis)
+func	0x086c	fn_087a_on_enter	Menu/screen handler (callback analysis)
+func	0x089a	menu_wakeup_1_on_enter	Menu/screen handler (callback analysis)
+func	0x08c4	menu_wakeup_1	Menu/screen handler (callback analysis)
+func	0x08e4	fn_08fa_on_back	Menu/screen handler (callback analysis)
+func	0x08ec	fn_08fa_on_enter	Menu/screen handler (callback analysis)
+func	0x091a	menu_wakeup_2_on_enter	Menu/screen handler (callback analysis)
+func	0x0944	menu_wakeup_2	Menu/screen handler (callback analysis)
+func	0x0a90	menu_cold_water_temp	Menu/screen handler (callback analysis)
+func	0x0b18	menu_cold_water_temp_on_enter	Menu/screen handler (callback analysis)
+func	0x0b2c	menu_mix_water_temp	Menu/screen handler (callback analysis)
+func	0x0b92	menu_mix_water_temp_on_enter	Menu/screen handler (callback analysis)
+func	0x0c32	menu_install_boiling_temp	Menu/screen handler (callback analysis)
+func	0x0c62	menu_service_boiling_temp	Menu/screen handler (callback analysis)
+func	0x0c94	menu_install_boiling_temp_on_enter	Menu/screen handler (callback analysis)
+func	0x0c9e	menu_install_boiling_temp_on_up	Menu/screen handler (callback analysis)
+func	0x0ca6	menu_install_boiling_temp_on_down	Menu/screen handler (callback analysis)
+func	0x0ccc	menu_cold_water_qty	Menu/screen handler (callback analysis)
+func	0x0cee	menu_cold_water_qty_on_enter	Menu/screen handler (callback analysis)
+func	0x0d22	menu_mix_water_qty	Menu/screen handler (callback analysis)
+func	0x0d4e	menu_mix_water_qty_on_enter	Menu/screen handler (callback analysis)
+func	0x0d58	menu_hot_water_qty	Menu/screen handler (callback analysis)
+func	0x0da0	menu_hot_water_qty_on_enter	Menu/screen handler (callback analysis)
+func	0x0db8	menu_replacement	Menu/screen handler (callback analysis)
+func	0x0df2	menu_replacement_on_up	Menu/screen handler (callback analysis)
+func	0x0e04	menu_replacement_on_up_b	Menu/screen handler (callback analysis)
+func	0x0f1c	screen_replacement_counter_confirm	Menu/screen handler (callback analysis)
+func	0x0f2e	screen_replacement_counter_confirm_b	Menu/screen handler (callback analysis)
+func	0x0f42	screen_replacement_counter_on_enter	Menu/screen handler (callback analysis)
+func	0x11e2	fn_11e2_on_back_on_enter	Menu/screen handler (callback analysis)
+func	0x120a	fn_11e2_on_enter	Menu/screen handler (callback analysis)
+func	0x127a	screen_fill_tanks_on_timeout	Menu/screen handler (callback analysis)
+func	0x12d0	screen_fill_tanks_on_aux	Menu/screen handler (callback analysis)
+func	0x12f8	screen_fill_tanks_on_aux_on_aux	Menu/screen handler (callback analysis)
+func	0x1304	screen_fill_tanks_on_enter	Menu/screen handler (callback analysis)
+func	0x1334	screen_fill_tanks_confirm2	Menu/screen handler (callback analysis)
+func	0x13ce	fn_13b0_on_aux	Menu/screen handler (callback analysis)
+func	0x13e8	menu_service_temp_sensor	Menu/screen handler (callback analysis)
+func	0x1410	menu_service_temp_sensor_on_enter	Menu/screen handler (callback analysis)
+func	0x14ce	fn_2220_on_aux	Menu/screen handler (callback analysis)
+func	0x1524	screen_language_select_on_enter	Menu/screen handler (callback analysis)
+func	0x1538	menu_install_fill_tanks	Menu/screen handler (callback analysis)
+func	0x16c2	menu_install_fill_tanks_on_enter	Menu/screen handler (callback analysis)
+func	0x17a2	fn_1780_on_enter	Menu/screen handler (callback analysis)
+func	0x1bf2	menu_default_back	Menu/screen handler (callback analysis)
+func	0x1bfa	menu_default_ignore	Menu/screen handler (callback analysis)
+func	0x1c32	menu_mix_water_temp_on_up	Menu/screen handler (callback analysis)
+func	0x1c74	menu_mix_water_temp_on_down	Menu/screen handler (callback analysis)
+func	0x1d5e	menu_cold_water_temp_on_down	Menu/screen handler (callback analysis)
+func	0x1d9e	menu_cold_water_temp_on_up	Menu/screen handler (callback analysis)
+func	0x1ddc	menu_mix_water_qty_on_up	Menu/screen handler (callback analysis)
+func	0x1de2	menu_mix_water_qty_on_down	Menu/screen handler (callback analysis)
+func	0x1de8	menu_hot_water_qty_on_up	Menu/screen handler (callback analysis)
+func	0x1dee	menu_hot_water_qty_on_down	Menu/screen handler (callback analysis)
+func	0x1ff2	menu_service_config_menu	Menu/screen handler (callback analysis)
+func	0x2008	menu_service_config_menu_on_enter	Menu/screen handler (callback analysis)
+func	0x2020	menu_service_application	Menu/screen handler (callback analysis)
+func	0x2058	menu_service_application_on_back	Menu/screen handler (callback analysis)
+func	0x205a	menu_service_application_on_enter	Menu/screen handler (callback analysis)
+func	0x207e	menu_service_uv	Menu/screen handler (callback analysis)
+func	0x2094	menu_service_uv_on_enter	Menu/screen handler (callback analysis)
+func	0x20b0	menu_service_back_light	Menu/screen handler (callback analysis)
+func	0x20c6	menu_service_back_light_on_enter	Menu/screen handler (callback analysis)
+func	0x23a6	screen_clock_edit_hour	Clock set: edit hours (then minutes)
+func	0x07cc	screen_clock_edit_minute	Clock set: edit minutes
+func	0x087a	screen_wakeup1_edit_minute	Wake up 1: edit minute (WKUPMINUTE1)
+func	0x08fa	screen_wakeup2_edit_minute	Wake up 2: edit minute (WKUPMINUTE2)
+func	0x2bb6	screen_wakeup1_edit_hour	Wake up 1: edit hour
+func	0x2bc2	screen_wakeup2_edit_hour	Wake up 2: edit hour
+func	0x27bc	screen_time_edit_setup	Install up/down callbacks for time editing
+func	0x25f2	screen_time_edit_setup_b	Install up/down callbacks for time editing (variant)
+func	0x14d6	screen_language_select	Language list (menu 0xE5CE)
+func	0x122e	screen_flushing	Flushing: open cold valve for flush time computed from WATERFLOW
+func	0x2a38	screen_replacement_counter	Replacement counter screen ("TIME TO NEXT REPLACEMENT")
+func	0x1128	screen_uv_lamp_removed	"UV LAMP IS REMOVED / INSERT UV LAMP"
+func	0x1140	screen_uv_lamp_new_old	Ask NEW/OLD UV LAMP after refit (new resets GUV counter)
+func	0x1192	screen_filter_removed	"FILTER IS REMOVED / INSERT FILTER"
+func	0x11aa	screen_filter_new_old	Ask NEW/OLD FILTER after refit (new resets GFI counter)
+func	0x135c	screen_drop_collector_removed	"DROP COLLECTOR IS REMOVED / PLEASE REPLACE IT"
+func	0x137a	screen_drop_collector_full	"DROP COLLECTOR IS FULL / PLEASE EMPTY IT"
+func	0x1392	screen_exit_power_down	"EXIT POWERDOWN MODE?"
+func	0x13b0	screen_flush_recommended	"FLUSH SYSTEM RECOMMENDED"
+func	0x1644	screen_stopped	"STOPPED..."
+func	0x1684	screen_fill_cold_tank	"FILL COLD WATER TANK"
+func	0x1780	screen_installation_completed	"INSTALLATION COMPLETED"
+func	0x2144	ui_draw_yes_no	Draw YES/NO choice
+func	0x2220	screen_service_resetting	"SERVICE" / "RESETTING... WAIT"
+func	0x243e	ui_draw_press_ok_when_ready	"PRESS OK WHEN READY"
+func	0x261a	ui_draw_power_down	"POWER DOWN"
+func	0x26b6	ui_draw_done	"DONE"
+func	0x26ea	ui_draw_press_any_key_to_stop	"PRESS ANY KEY TO STOP"
+func	0x26f0	ui_draw_press_ok_to_continue	"PRESS OK TO CONTINUE"
+func	0x29be	ui_draw_flushing	"FLUSHING"
+func	0x2b46	ui_draw_on_off	Draw ON/OFF choice
+func	0x27b0	ui_draw_word	Draw UI word (id in W) via text_draw_word
+func	0x2ba4	ui_draw_title_word	Draw title word (id in W)
+func	0x24ca	ui_draw_word_push6	Draw word then push 6
+func	0x2790	ui_set_text_a	Load text pointer of word (id in W) into menu_text_a and redraw
+func	0x27a4	ui_set_text_b	Load text pointer of word (id in W) into menu_text_b
+func	0x2b90	ui_word_ptr	Return pointer to UI word in current language
+func	0x9282	word_lookup_a	Word table lookup (group A: 0xF114 EN, 0xEF8E RU, 0xEE06 HE)
+func	0x92ae	word_lookup_b	Word table lookup (group B dictionary: 0xF22E EN, 0xF0A8 RU, 0xEF20 HE)
+func	0x9aba	cfg_language	Language code from SYSTEMCONFIG2 bits 3-5 (0 EN, 4 RU, 5 HE)
+func	0x1ae2	ui_draw_title	Draw title bar text
+func	0x17c4	menu_draw	Draw current menu (title and items)
+func	0x2150	menu_set_cbs_back_default	Store enter-callback high byte and install default back/up/down callbacks
+func	0x2248	menu_set_cbs_down_hi	Store down-callback high byte and install defaults
+func	0x2972	menu_set_cbs_back_hi	Store back-callback high byte and install defaults
+func	0x2580	menu_set_cbs_enter_hi	Store enter-callback high byte and install defaults
+func	0x2434	menu_set_cbs_enter_hi_b	Store enter-callback high byte (variant)
+func	0x254a	menu_set_cbs_enter_hi_c	Store enter-callback high byte (variant)
+func	0x2806	menu_set_cbs_enter_hi_d	Store enter-callback high byte (variant)
+func	0x2846	menu_set_cbs_back_hi_b	Store back-callback high byte (variant)
+func	0x2a48	menu_set_cbs_updown_default	Install default up/down callbacks
+func	0x2a8a	menu_clear_cbs	Store back high byte and clear other callbacks
+func	0x2ad8	menu_set_cbs_enter_hi_e	Store enter high byte then defaults
+func	0x2198	menu_set_cbs_noop	Install no-op callbacks
+func	0x252c	menu_set_cbs_noop_b	Install no-op enter callback
+func	0x06aa	ui_draw_time	Draw time "%02b:%02b AM/PM" for clock/wake-up editing
+func	0x1888	ui_draw_clock_text	Draw clock text "%02b:%02b %s"
+func	0x1908	ui_draw_day	Draw day of week
+# ---- larger UI / library functions (second pass) ----
+func	0x0200	restore_factory_apply	Restore factory settings: rewrite SYSTEMCONFIG2 language bits and user parameters
+func	0x03f6	ui_draw_set_hint	Draw "USE COLD / CUP TO SET TEMP./QTY." hint
+func	0x0458	screen_energy_saving_draw	Draw energy-saving setting ("MODE IS OFF" / "SHUT OFF HEATER AFTER %d MIN")
+func	0x054e	screen_power_down_draw	Draw auto power-down setting ("OFF" / "POWER DOWN AFTER %d HOURS")
+func	0x097a	ui_draw_temp_value	Draw a temperature with deg C/deg F symbol (converts when imperial)
+func	0x0a0e	ui_draw_temp_units	Draw temperature in selected units
+func	0x0b9c	screen_param_checksum	Compute and show "PARAMETERS CS" (sum of 75 EEPROM parameters)
+func	0x1582	screen_tank_filling	"HOT/COLD TANK IS FILLING UP" screen with timer
+func	0x15dc	menu_install_cbs_from_args	Call callback, then install enter/timeout/aux callbacks from arguments
+func	0x1848	menu_draw_items	Draw menu item list with highlight on selected item
+func	0x1974	menu_draw_item_line	Draw one menu line (highlighted when selected)
+func	0x1a00	ui_draw_wakeup_times	Draw wake-up 1/2 times (WKUPHOUR/WKUPMINUTE)
+func	0x1a54	ui_draw_temp_setting	Draw temperature setting value (C or F)
+func	0x1b4a	screen_temp_sensor_values	Service: show all temperature sensor readings
+func	0x1cb6	menu_value_increment	Increase edited value by step, clamp to maximum
+func	0x1d16	menu_value_decrement	Decrease edited value by step, clamp to minimum
+func	0x1e3e	screen_cold_temp_bar	Cold water temperature setting with bar graph
+func	0x1f12	screen_mix_temp_bar	Mix water temperature setting with bar graph
+func	0x1f6a	screen_qty_bar	Water quantity setting with bar graph
+func	0x20e8	progress_bar_scale	Scale a value to bar width
+func	0x34ae	ui_draw_status_icons	Draw heater/compressor indicators and smoothed tank temperatures
+func	0x3584	screen_diagnostics	Service diagnostics screen: title "T6 3.47V" (firmware version), sensors, states
+func	0x48b2	ui_draw_home_info	Draw home-screen information (temperatures / clock area)
+func	0x4af4	ui_select_home_screen	Map current screen to its home/return screen
+func	0x4b32	replacement_days_left	Compute days to next filter/UV replacement
+func	0x4bf6	temp_c_to_f	Convert deg C to deg F (x9/5+32)
+func	0x4cc2	filter_usage_calc	Filter usage from FWU counter and WATERFLOW
+func	0x4d24	ui_scale_mul	Multiply/divide helper for display values
+func	0x7702	serial_hex_digit	Convert nibble to ASCII hex digit
+func	0x7774	serial_print_number	Print number in hex/decimal on serial console
+func	0x9c40	os_insert_delay_queue	Salvo internal: insert task into delay queue
+func	0x9ff4	os_wait_event_internal	Salvo internal: event wait handling
+func	0xa116	os_remove_from_queues	Salvo internal: remove task from eligible/delay queues
+func	0xa79e	clock_edit_compute_ampm	Clock edit: compute AM/PM/24h for edited time
+func	0xa826	clock_draw_text_style	Draw clock in small text style
+func	0xb64a	gfx_bitmap_check	Graphics: validate bitmap coordinates
+func	0xb6a6	gfx_bitmap_blit	Graphics: draw bitmap at position
+func	0xb772	gfx_draw_frame_left	Graphics: draw left frame/tank outline
+func	0xb7e6	gfx_draw_frame_right	Graphics: draw right frame/tank outline
+func	0xb85a	gfx_anim_icon_a	Graphics: animated icon A (14 frames of 0x38 bytes)
+func	0xb898	gfx_anim_icon_b	Graphics: animated icon B (frames of 0x94 bytes)
+func	0xb908	gfx_anim_icon_c	Graphics: animated icon C (frames of 0x50 bytes)
+func	0xb944	gfx_anim_icon_d	Graphics: animated icon D (frames of 0x68 bytes)
+func	0xb982	gfx_clip_x	Graphics: clip x coordinate
+func	0xb9be	gfx_clip_y	Graphics: clip y coordinate
+func	0xc408	int16_to_bcd	Convert 16-bit binary to BCD (double dabble)
+func	0xc45c	ltoa	C library: long to ASCII (with sign)
+func	0xc596	int32_to_bcd	Convert 32-bit binary to BCD
+func	0xcb30	text_copy_rom	Copy ROM text to buffer
+func	0xcb86	text_measure_width	Measure pixel width of a text line
+func	0xcc5a	text_render_glyphs	Render text glyphs to the LCD
+func	0xcf2e	lcd_puts_rom	Draw a ROM string on the LCD
+func	0xd008	lcd_draw_glyph	Draw one font glyph column set
+func	0xd08c	ui_draw_label_value	Draw a label and value line (service screens)
+func	0xd530	param_find_record	Find parameter record in ROM table by id
+func	0xe23a	ui_draw_progress_segment	Draw one segment of the progress popup
+func	0xe2fc	ui_draw_progress_popup	Draw progress/level popup (fill tanks, dispensing)
+func	0xf482	__mul16x16_32	C18 runtime: 16x16 -> 32-bit multiply
+func	0xf518	memcpypgm2ram	C18 runtime: copy ROM to RAM
+func	0xf5e0	memcpy	C18 runtime: copy RAM to RAM
+func	0xfb04	__mul32	C18 runtime: 32-bit multiply
+func	0xfb74	__divu32	C18 runtime: 32-bit unsigned divide
+# ---- auto-named compiler fragments (behaviour-derived; see comments) ----
+func	0x0000	ui_to_c018_startup_0000	Auto: calls c018_startup; 1 instr
+func	0x0008	ui_to_isr_high_0008	Auto: calls isr_high; 1 instr
+func	0x0018	ui_to_isr_low_0018	Auto: calls isr_low; 1 instr
+func	0x00f6	ui_set_cfg_systemconfig_00f6	Auto: writes cfg_systemconfig; reads cfg_systemconfig; 8 instr
+func	0x0114	ui_to_ui_to_menu_default_back_0114	Auto: Small wrapper around ui_to_menu_default_back; 4 instr
+func	0x0304	ui_to_lcd_clear_0304	Auto: writes menu_cb_enter; calls lcd_clear,menu_set_cbs_enter_hi; 7 instr
+func	0x033c	ui_get_menu_flag_033c	Auto: reads menu_flag; 3 instr
+func	0x0450	ui_chain_ui_to_lcd_clear_fn21d8_0450	Auto: Calls ui_to_lcd_clear, 0x21d8; 2 instr
+func	0x0606	ui_set_text_fill_width_0606	Auto: writes text_fill_width; reads menu_value_lo; 18 instr
+func	0x092e	ui_to_clock_edit_load_wake2_092e	Auto: calls clock_edit_load_wake2,screen_wakeup2_edit_hour; 7 instr
+func	0x094a	ui_to_menu_set_cbs_back_default_094a	Auto: writes menu_cb_enter; calls menu_set_cbs_back_default; 10 instr
+func	0x0964	ui_get_cfg_systemconfig3_0964	Auto: reads cfg_systemconfig3; 3 instr
+func	0x096a	ui_const_then_0970_096a	Auto: compiler fragment: MOVLW #0x4b ; BRA 0x000970
+func	0x096e	ui_push_args_4c_096e	Auto: Push constant arguments [76] then call 0x92f2; 5 instr
+func	0x0cae	ui_push_args_01_46_03_ui_to_ui_draw_temp_value_0cae	Auto: Push constant arguments [1, 70, 3] then call ui_to_ui_draw_temp_value; 13 instr
+func	0x0cf8	ui_to_menu_set_cbs_enter_hi_d_0cf8	Auto: writes menu_cb_enter; calls menu_set_cbs_enter_hi_d; 11 instr
+func	0x0d18	ui_to_ui_get_math_aarg_lo_0d18	Auto: Small wrapper around ui_get_math_aarg_lo; 3 instr
+func	0x1016	ui_set_menu_item_1016	Auto: writes menu_item; reads c18_tmp1,PCLATH; calls computed_jump,menu_draw; 13 instr
+func	0x10d4	ui_bank1_ui_to_lcd_clear_10d4	Auto: Select bank then jump to ui_to_lcd_clear; 3 instr
+func	0x111c	ui_bank1_ui_set_menu_timer_lo_111c	Auto: Select bank then jump to ui_set_menu_timer_lo; 2 instr
+func	0x1122	ui_get_menu_mode_1122	Auto: reads menu_mode; 3 instr
+func	0x1178	ui_set_menu_mode_1178	Auto: writes menu_mode; reads menu_edit_mode; 10 instr
+func	0x1356	ui_bank1_ui_set_menu_mode_1356	Auto: Select bank then jump to ui_set_menu_mode; 2 instr
+func	0x1374	ui_bank1_ui_set_menu_mode_1374	Auto: Select bank then jump to ui_set_menu_mode; 2 instr
+func	0x13d8	ui_to_menu_draw_13d8	Auto: writes menu_table_ptr_lo,menu_table_ptr_hi; calls menu_draw; 7 instr
+func	0x1438	ui_to_menu_set_cbs_back_default_1438	Auto: writes menu_cb_enter; reads cfg_systemconfig4; calls menu_set_cbs_back_default; 13 instr
+func	0x1458	ui_to_screen_service_resetting_1458	Auto: writes cfg_systemconfig4; reads cfg_systemconfig4,menu_edit_mode; calls screen_service_resetting,menu_default_back; 22 instr
+func	0x148c	ui_to_menu_set_cbs_back_default_148c	Auto: writes menu_cb_enter; reads cfg_systemconfig5; calls menu_set_cbs_back_default; 10 instr
+func	0x14a6	ui_to_screen_service_resetting_14a6	Auto: writes cfg_systemconfig5; reads cfg_systemconfig5,menu_edit_mode; calls screen_service_resetting,menu_default_back; 16 instr
+func	0x14d2	ui_to_screen_language_select_14d2	Auto: calls screen_language_select; 1 instr
+func	0x1550	ui_word_fill_cold_water_tank_1550	Auto: shows "FILL COLD WATER TANK"; writes menu_cb_aux,menu_cb_aux_hi; reads menu_cb_enter,menu_cb_enter_hi; calls ui_draw_press_ok_when_ready,menu_set_cbs_noop; 19 instr
+func	0x16d2	ui_to_screen_tank_filling_16d2	Auto: calls screen_tank_filling; 26 instr
+func	0x170a	ui_to_ui_to_screen_stopped_170a	Auto: Small wrapper around ui_to_screen_stopped; 4 instr
+func	0x1714	ui_push_args_24_17_01_ui_to_screen_fill_cold_tank_1714	Auto: Push constant arguments [36, 23, 1] then call ui_to_screen_fill_cold_tank; 7 instr
+func	0x1724	ui_push_args_32_17_1724	Auto: Push constant arguments [50, 23] then call 0x26f6; 6 instr
+func	0x1732	ui_to_screen_tank_filling_1732	Auto: calls screen_tank_filling; 25 instr
+func	0x1768	ui_to_ui_to_screen_stopped_1768	Auto: Small wrapper around ui_to_screen_stopped; 4 instr
+func	0x1772	ui_push_args_80_17_ui_to_screen_fill_cold_tank_1772	Auto: Push constant arguments [128, 23] then call ui_to_screen_fill_cold_tank; 6 instr
+func	0x1c0c	ui_to_ui_to_lcd_puts_rom_1c0c	Auto: Small wrapper around ui_to_lcd_puts_rom; 16 instr
+func	0x1df4	ui_to_ui_to_ui_draw_temp_units_1df4	Auto: Small wrapper around ui_to_ui_draw_temp_units; 15 instr
+func	0x1e14	ui_set_menu_value_lo_1e14	Auto: writes menu_value_lo,menu_value_hi; reads cfg_systemconfig5; 21 instr
+func	0x20de	ui_to_ui_draw_title_20de	Auto: calls ui_draw_title,ui_draw_on_off; 3 instr
+func	0x215a	ui_to_param_write_215a	Auto: calls param_write; 5 instr
+func	0x2166	ui_c18_prologue_2166	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0x2178	ui_chain_ui_set_menu_value__ui_get_menu_item_ui_to_ui_draw_set__	Auto: Calls ui_set_menu_value_step_lo, ui_get_menu_item, ui_to_ui_draw_set_hint; 3 instr
+func	0x2180	ui_get_menu_value_step_lo_2180	Auto: reads menu_value_step_lo,menu_value_max_lo,menu_value_max_hi; 12 instr
+func	0x21a0	ui_to___divs16_21a0	Auto: writes menu_value_min_lo,menu_value_min_hi; reads menu_value_step_lo,menu_value_max_lo,menu_value_step_hi,menu_value_min_lo,menu_value_min_hi,math_aarg_lo; calls __divs16; 16 instr
+func	0x21ca	ui_get_menu_value_lo_21ca	Auto: reads menu_value_lo,menu_value_max_lo,menu_value_max_hi; 7 instr
+func	0x21d8	ui_c18_epilogue_21d8	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0x21e4	ui_to_param_table_lookup_21e4	Auto: calls param_table_lookup; 6 instr
+func	0x21f4	ui_stack_adjust_21f4	Auto: Software stack push/pop helper; 4 instr
+func	0x21fc	ui_to_lcd_clear_21fc	Auto: writes menu_table_ptr_lo,menu_table_ptr_hi; calls lcd_clear; 4 instr
+func	0x2208	ui_set_menu_value_min_lo_2208	Auto: writes menu_value_min_lo; reads progress_bar_width,progress_bar_value; 12 instr
+func	0x2254	ui_get_menu_item_2254	Auto: reads menu_item,TBLPTRL,TBLPTRH; 12 instr
+func	0x2270	ui_get_menu_item_2270	Auto: reads menu_item,TABLAT; 9 instr
+func	0x228c	ui_callw_ui_to_eeprom_read_raw_228c	Auto: Push W as argument and call ui_to_eeprom_read_raw; 3 instr
+func	0x2296	ui_get_menu_item_2296	Auto: reads menu_item,TBLPTRL,TBLPTRH; 9 instr
+func	0x22aa	ui_get_menu_value_lo_22aa	Auto: reads menu_value_lo,menu_value_hi; 5 instr
+func	0x22ba	ui_get_TBLPTRL_22ba	Auto: reads TBLPTRL,TBLPTRH,TABLAT; 8 instr
+func	0x22cc	ui_to_ui_get_c18_tmp0_22cc	Auto: Small wrapper around ui_get_c18_tmp0; 7 instr
+func	0x22dc	ui_to_ui_draw_title_22dc	Auto: calls ui_draw_title,ui_draw_on_off; 4 instr
+func	0x22ea	ui_to_ui_draw_on_off_22ea	Auto: reads cfg_systemconfig3; calls ui_draw_on_off; 6 instr
+func	0x22fa	ui_set_stat_GUV_22fa	Auto: writes stat_GUV,stat_FM,stat_UVS,stat_UI; 28 instr
+func	0x2334	ui_to_ui_get_cfg_systemconfig2_2334	Auto: Small wrapper around ui_get_cfg_systemconfig2; 3 instr
+func	0x233c	ui_word_filter_233c	Auto: shows "FILTER"; calls lcd_clear; 3 instr
+func	0x2344	ui_set_menu_value_step_lo_2344	Auto: writes menu_value_step_lo,menu_value_step_hi; 7 instr
+func	0x2356	ui_to_ui_draw_temp_value_2356	Auto: calls ui_draw_temp_value; 3 instr
+func	0x2360	ui_to_param_read_max_2360	Auto: writes menu_value_max_lo,menu_value_max_hi; calls param_read_max; 7 instr
+func	0x2370	ui_word_installation_2370	Auto: shows "INSTALLATION"; calls lcd_clear; 3 instr
+func	0x2378	ui_get_menu_value_step_lo_2378	Auto: reads menu_value_step_lo,menu_value_lo,menu_value_hi; 7 instr
+func	0x2386	ui_set_menu_edit_mode_2386	Auto: writes menu_edit_mode; 3 instr
+func	0x238c	ui_callw_fncfc6_238c	Auto: Push W as argument and call 0xcfc6; 5 instr
+func	0x2398	ui_get_c18_tmp2_2398	Auto: reads c18_tmp2,TBLPTRL,c18_tmp3,TBLPTRH; 4 instr
+func	0x23d8	ui_get_menu_value_hi_23d8	Auto: reads menu_value_hi,menu_value_lo; 7 instr
+func	0x23ea	ui_to_ui_draw_time_23ea	Auto: calls ui_draw_time; 5 instr
+func	0x23f6	ui_to_lcd_puts_rom_23f6	Auto: calls lcd_puts_rom; 5 instr
+func	0x2402	ui_set_menu_cb_timeout_2402	Auto: writes menu_cb_timeout,menu_cb_timeout_hi,menu_cb_enter,menu_cb_enter_hi,menu_cb_back,menu_cb_back_hi; 25 instr
+func	0x244a	ui_set_ui_wake_pending_244a	Auto: writes ui_wake_pending,text_fill_width; 5 instr
+func	0x2454	ui_bank1_ui_set_menu_cb_up_2454	Auto: Select bank then jump to ui_set_menu_cb_up; 2 instr
+func	0x245a	ui_to_ui_set_text_row_245a	Auto: Small wrapper around ui_set_text_row; 7 instr
+func	0x246a	ui_to_screen_replacement_counter_246a	Auto: writes menu_cb_back,menu_cb_back_hi,menu_cb_down_hi; calls screen_replacement_counter,menu_set_cbs_updown_default; 8 instr
+func	0x247a	ui_set_stat_GFI_247a	Auto: writes stat_GFI,stat_FWU; 14 instr
+func	0x2498	ui_set_menu_edit_mode_2498	Auto: writes menu_edit_mode; 3 instr
+func	0x249e	ui_to_ui_draw_time_249e	Auto: calls ui_draw_time; 4 instr
+func	0x24a8	ui_get_progress_bar_value_24a8	Auto: reads progress_bar_value; 7 instr
+func	0x24ba	ui_get_menu_item_24ba	Auto: reads menu_item,TBLPTRH,TBLPTRL; 8 instr
+func	0x24d2	ui_to_ui_draw_temp_units_24d2	Auto: writes ui_substate; calls ui_draw_temp_units; 11 instr
+func	0x24ea	ui_to___mul16x16_32_24ea	Auto: reads menu_value_lo,menu_value_hi; calls __mul16x16_32; 5 instr
+func	0x24fa	ui_get_menu_value_lo_24fa	Auto: reads menu_value_lo,menu_value_min_lo,menu_value_hi,menu_value_max_hi; 9 instr
+func	0x250c	ui_get_menu_value_min_lo_250c	Auto: reads menu_value_min_lo,menu_value_lo,menu_value_hi,menu_value_step_hi; 9 instr
+func	0x251e	ui_set_menu_timer_lo_251e	Auto: writes menu_timer_lo,menu_timer_hi,menu_cb_timeout,menu_cb_timeout_hi,menu_cb_aux,menu_cb_aux_hi; 7 instr
+func	0x2536	ui_to_ui_word_ptr_2536	Auto: reads c18_tmp0,c18_tmp1; calls ui_word_ptr; 6 instr
+func	0x2554	ui_get_menu_item_2554	Auto: reads menu_item; 5 instr
+func	0x255e	ui_set_menu_value_min_lo_255e	Auto: writes menu_value_min_lo,menu_value_min_hi; 5 instr
+func	0x2568	ui_get_menu_value_step_lo_2568	Auto: reads menu_value_step_lo,menu_value_step_hi; 4 instr
+func	0x2574	ui_get_menu_value_max_lo_2574	Auto: reads menu_value_max_lo,menu_value_max_hi; 4 instr
+func	0x258a	ui_get_cfg_systemconfig3_258a	Auto: reads cfg_systemconfig3; 5 instr
+func	0x2594	ui_to_txt_set_ui_hold_counter_2594	Auto: Small wrapper around txt_set_ui_hold_counter; 8 instr
+func	0x25a6	ui_frag_25a6	Auto: compiler fragment: ANDLW #0x7 ; MOVWF PRODL,ACCESS ; RLNCF PRODL,f,ACCESS ; RLNCF PRODL,f,ACCESS ; RLNCF PRODL,f,ACCESS ; MOVLW #0xc7 ; RETURN 0x0
+func	0x25b4	ui_callw_txt_set_ui_hold_counter_25b4	Auto: Push W as argument and call txt_set_ui_hold_counter; 6 instr
+func	0x25c2	ui_get_menu_value_step_lo_25c2	Auto: reads menu_value_step_lo,menu_value_step_hi; 3 instr
+func	0x25cc	ui_frame_push_args_25cc	Auto: Copy stack-frame arguments onto the stack for a call; 3 instr
+func	0x25d4	ui_to_param_table_lookup_25d4	Auto: calls param_table_lookup; 7 instr
+func	0x25e8	ui_get_c18_tmp0_25e8	Auto: reads c18_tmp0,TABLAT; 4 instr
+func	0x2606	ui_get_TBLPTRH_2606	Auto: reads TBLPTRH,c18_tmp4,TABLAT,c18_tmp5; 8 instr
+func	0x2628	ui_to_ui_get_menu_table_ptr_lo_2628	Auto: Small wrapper around ui_get_menu_table_ptr_lo; 5 instr
+func	0x2632	ui_get_c18_tmp1_2632	Auto: reads c18_tmp1,c18_tmp0; 7 instr
+func	0x2644	ui_stack_adjust_2644	Auto: Software stack push/pop helper; 6 instr
+func	0x2652	ui_get_menu_edit_mode_2652	Auto: reads menu_edit_mode; 6 instr
+func	0x265e	ui_push_args_14_04_mod_to_ui_draw_progress_segment_265e	Auto: Push constant arguments [20, 4] then call mod_to_ui_draw_progress_segment; 8 instr
+func	0x2670	ui_to_menu_key_back_2670	Auto: calls menu_key_back; 3 instr
+func	0x2678	ui_set_menu_value_lo_2678	Auto: writes menu_value_lo; 6 instr
+func	0x2684	ui_to_screen_cold_temp_bar_2684	Auto: calls screen_cold_temp_bar; 5 instr
+func	0x2690	ui_set_progress_bar_value_2690	Auto: writes progress_bar_value; reads progress_bar_x,progress_bar_y; 6 instr
+func	0x269c	ui_set_menu_timer_reload_lo_269c	Auto: writes menu_timer_reload_lo,menu_timer_reload_hi; 5 instr
+func	0x26a6	ui_set_menu_value_lo_26a6	Auto: writes menu_value_lo,menu_value_hi; 4 instr
+func	0x26ae	ui_word_uv_lamp_26ae	Auto: shows "UV LAMP"; calls lcd_clear; 3 instr
+func	0x26be	ui_set_menu_timer_lo_26be	Auto: writes menu_timer_lo,menu_timer_hi,menu_timer_reload_lo; reads menu_timer_hi; 7 instr
+func	0x26ce	ui_bank1_ui_set_menu_cb_enter_26ce	Auto: Select bank then jump to ui_set_menu_cb_enter; 2 instr
+func	0x26d4	ui_get_c18_tmp2_26d4	Auto: reads c18_tmp2,c18_tmp3; 5 instr
+func	0x26e2	ui_stack_adjust_26e2	Auto: Software stack push/pop helper; 4 instr
+func	0x26f6	ui_chain_ui_word_fill_cold__fn2b9c_26f6	Auto: Calls ui_word_fill_cold_water_tank, 0x2b9c; 2 instr
+func	0x26fc	ui_to_screen_stopped_26fc	Auto: calls screen_stopped; 5 instr
+func	0x2708	ui_to_screen_fill_cold_tank_2708	Auto: calls screen_fill_cold_tank; 2 instr
+func	0x270e	ui_to_menu_draw_item_line_270e	Auto: calls menu_draw_item_line; 3 instr
+func	0x2718	ui_to_txt_set_ui_hold_counter_2718	Auto: Small wrapper around txt_set_ui_hold_counter; 3 instr
+func	0x2720	ui_set_menu_value_lo_2720	Auto: writes menu_value_lo; 5 instr
+func	0x272a	ui_get_menu_value_max_lo_272a	Auto: reads menu_value_max_lo,menu_value_lo,menu_value_max_hi; 5 instr
+func	0x2734	ui_get_menu_value_max_lo_2734	Auto: reads menu_value_max_lo; 5 instr
+func	0x273e	ui_get_menu_value_min_lo_273e	Auto: reads menu_value_min_lo,menu_value_lo,menu_value_min_hi; 5 instr
+func	0x2748	ui_get_menu_value_max_lo_2748	Auto: reads menu_value_max_lo,menu_value_max_hi; 3 instr
+func	0x2752	ui_get_menu_value_lo_2752	Auto: reads menu_value_lo,menu_value_step_lo,menu_value_hi; 5 instr
+func	0x275c	ui_get_menu_value_step_lo_275c	Auto: reads menu_value_step_lo,menu_value_step_hi; 5 instr
+func	0x2766	ui_get_menu_value_min_lo_2766	Auto: reads menu_value_min_lo,menu_value_lo,menu_value_min_hi; 5 instr
+func	0x2770	ui_get_menu_edit_mode_2770	Auto: reads menu_edit_mode; 4 instr
+func	0x2778	ui_get_menu_value_lo_2778	Auto: reads menu_value_lo,menu_value_hi; 4 instr
+func	0x2780	ui_get_menu_item_2780	Auto: reads menu_item; 8 instr
+func	0x279e	ui_to_menu_default_back_279e	Auto: calls menu_default_back; 2 instr
+func	0x27d2	ui_set_menu_value_step_lo_27d2	Auto: writes menu_value_step_lo,menu_value_step_hi; reads menu_value_max_hi,menu_value_max_lo,menu_value_step_hi,menu_value_step_lo; 19 instr
+func	0x2800	ui_stack_adjust_2800	Auto: Software stack push/pop helper; 2 instr
+func	0x281a	ui_to_menu_set_cbs_noop_b_281a	Auto: calls menu_set_cbs_noop_b,menu_set_cbs_noop; 4 instr
+func	0x2826	ui_to_menu_set_cbs_down_hi_2826	Auto: writes menu_cb_enter,menu_cb_enter_hi,menu_cb_up,menu_cb_up_hi,menu_cb_down; calls menu_set_cbs_down_hi; 15 instr
+func	0x285a	ui_set_cfg_systemconfig2_285a	Auto: writes cfg_systemconfig2; reads TABLAT,cfg_systemconfig2; 13 instr
+func	0x2874	ui_to_ui_draw_title_word_2874	Auto: writes text_row; calls ui_draw_title_word; 6 instr
+func	0x2882	ui_to_menu_set_cbs_down_hi_2882	Auto: writes menu_cb_up,menu_cb_up_hi,menu_cb_down,menu_cb_enter,menu_cb_enter_hi; calls menu_set_cbs_down_hi; 13 instr
+func	0x289c	ui_to___divs16_289c	Auto: reads math_aarg_lo,math_aarg_hi; calls __divs16; 4 instr
+func	0x28aa	ui_to_ui_set_ui_wake_pending_28aa	Auto: Small wrapper around ui_set_ui_wake_pending; 4 instr
+func	0x28b4	ui_to_txt_set_ui_hold_counter_28b4	Auto: Small wrapper around txt_set_ui_hold_counter; 4 instr
+func	0x28be	ui_callw_lcd_write_data_28be	Auto: Push W as argument and call lcd_write_data; 4 instr
+func	0x28c8	ui_to___divs16_28c8	Auto: reads c18_tmp0,c18_tmp1,math_aarg_lo,math_aarg_hi; calls __divs16; 8 instr
+func	0x28e2	ui_param_tboil_28e2	Auto: reads params TBOIL; writes menu_value_step_lo,menu_value_step_hi; 9 instr
+func	0x28f6	ui_to_ui_get_menu_table_ptr_lo_28f6	Auto: Small wrapper around ui_get_menu_table_ptr_lo; 3 instr
+func	0x28fe	ui_to_progress_bar_scale_28fe	Auto: calls progress_bar_scale; 2 instr
+func	0x2904	ui_to_stat_counter_save_2904	Auto: calls stat_counter_save; 4 instr
+func	0x290e	ui_to_ui_get_menu_value_step_lo_290e	Auto: Small wrapper around ui_get_menu_value_step_lo; 8 instr
+func	0x2922	ui_get_progress_bar_x_2922	Auto: reads progress_bar_x,menu_value_step_lo,menu_value_max_lo,menu_value_max_hi; 12 instr
+func	0x293a	ui_get_menu_value_min_lo_293a	Auto: reads menu_value_min_lo; 9 instr
+func	0x2952	ui_to_ui_get_menu_value_hi_2952	Auto: Small wrapper around ui_get_menu_value_hi; 3 instr
+func	0x295a	ui_get_math_aarg_lo_295a	Auto: reads math_aarg_lo; 4 instr
+func	0x2964	ui_to_screen_time_edit_setup_b_2964	Auto: calls screen_time_edit_setup_b; 5 instr
+func	0x2986	ui_to_ui_draw_title_2986	Auto: calls ui_draw_title,ui_draw_yes_no; 3 instr
+func	0x2992	ui_chain_ui_get_TBLPTRL_ui_to_ui_draw_set__2992	Auto: Calls ui_get_TBLPTRL, ui_to_ui_draw_set_hint; 2 instr
+func	0x2996	ui_to_text_draw_word_2996	Auto: calls text_draw_word,ui_draw_yes_no; 4 instr
+func	0x29a2	ui_get_c18_tmp0_29a2	Auto: reads c18_tmp0,c18_tmp1; 3 instr
+func	0x29ac	ui_to_lcd_clear_29ac	Auto: calls lcd_clear,ui_draw_title; 6 instr
+func	0x29cc	ui_to_ui_get_menu_table_ptr_lo_29cc	Auto: Small wrapper around ui_get_menu_table_ptr_lo; 4 instr
+func	0x29d6	ui_get_c18_tmp0_29d6	Auto: reads c18_tmp0,TABLAT,c18_tmp1; 7 instr
+func	0x29e8	ui_get_TBLPTRL_29e8	Auto: reads TBLPTRL,TBLPTRH,TABLAT; 9 instr
+func	0x29fa	ui_set_menu_cb_up_29fa	Auto: writes menu_cb_up,menu_cb_up_hi,menu_cb_down,menu_cb_down_hi; 6 instr
+func	0x2a06	ui_set_menu_mode_2a06	Auto: writes menu_mode; 4 instr
+func	0x2a10	ui_callw_mod_set_lcd_delay_counter_2a10	Auto: Push W as argument and call mod_set_lcd_delay_counter; 5 instr
+func	0x2a1c	ui_to_ui_draw_title_word_2a1c	Auto: calls ui_draw_title_word; 1 instr
+func	0x2a20	ui_to_ui_set_ui_wake_pending_2a20	Auto: Small wrapper around ui_set_ui_wake_pending; 3 instr
+func	0x2a28	ui_get_cfg_systemconfig3_2a28	Auto: reads cfg_systemconfig3,menu_edit_mode; 6 instr
+func	0x2a58	ui_to_system_wake_2a58	Auto: calls system_wake; 3 instr
+func	0x2a64	ui_get_menu_table_ptr_lo_2a64	Auto: reads menu_table_ptr_lo,TABLAT,menu_table_ptr_hi; 5 instr
+func	0x2a72	ui_word_put_2_liter_jug_x0aunder_the_2a72	Auto: shows "PUT 2 LITER JUG\x0aUNDER THE SPOUT"; calls ui_draw_press_ok_when_ready; 6 instr
+func	0x2a7e	ui_to_menu_set_cbs_noop_b_2a7e	Auto: writes menu_cb_key,menu_cb_key_hi; calls menu_set_cbs_noop_b,menu_set_cbs_noop; 5 instr
+func	0x2a96	ui_to_ui_word_installation_2a96	Auto: Small wrapper around ui_word_installation; 5 instr
+func	0x2aa2	ui_get_menu_tmp_a_2aa2	Auto: reads menu_tmp_a; 3 instr
+func	0x2aae	ui_set_ui_wake_pending_2aae	Auto: writes ui_wake_pending,text_x; 5 instr
+func	0x2aba	ui_stack_adjust_2aba	Auto: Software stack push/pop helper; 5 instr
+func	0x2ac6	ui_chain_fn21f4_ui_set_menu_value__2ac6	Auto: Calls 0x21f4, ui_set_menu_value_lo; 2 instr
+func	0x2ace	ui_get_menu_value_lo_2ace	Auto: reads menu_value_lo,menu_value_hi; 3 instr
+func	0x2ade	ui_set_menu_timer_lo_2ade	Auto: writes menu_timer_lo,menu_timer_hi; 5 instr
+func	0x2ae8	ui_to_lcd_clear_2ae8	Auto: writes menu_edit_mode; calls lcd_clear; 3 instr
+func	0x2af0	ui_to_screen_temp_sensor_values_2af0	Auto: calls screen_temp_sensor_values; 3 instr
+func	0x2af8	ui_stack_adjust_2af8	Auto: Software stack push/pop helper; 3 instr
+func	0x2b00	ui_to_eeprom_read_raw_2b00	Auto: calls eeprom_read_raw; 3 instr
+func	0x2b08	ui_set_text_row_2b08	Auto: writes text_row; 4 instr
+func	0x2b10	ui_callw_txt_set_ui_hold_counter_2b10	Auto: Push W as argument and call txt_set_ui_hold_counter; 2 instr
+func	0x2b16	ui_frag_2b16	Auto: compiler fragment: CALL 0x002166,0x0 ; MOVLW #0xfd ; RETURN 0x0
+func	0x2b1e	ui_compare_multibyte_2b1e	Auto: compiler fragment: MOVWF 0x0014,ACCESS ; MOVLW #0x5 ; SUBWF FSR1L,w,ACCESS ; RETURN 0x0
+func	0x2b26	ui_stack_adjust_2b26	Auto: Software stack push/pop helper; 4 instr
+func	0x2b2e	ui_get_cfg_systemconfig2_2b2e	Auto: reads cfg_systemconfig2; 7 instr
+func	0x2b3c	ui_get_menu_table_ptr_lo_2b3c	Auto: reads menu_table_ptr_lo,TBLPTRL,menu_table_ptr_hi,TBLPTRH; 3 instr
+func	0x2b52	ui_get_c18_tmp0_2b52	Auto: reads c18_tmp0,TBLPTRL,c18_tmp1,TBLPTRH; 4 instr
+func	0x2b5e	ui_callw_fn0450_2b5e	Auto: Push W as argument and call 0x450; 4 instr
+func	0x2b68	ui_get_TBLPTRL_2b68	Auto: reads TBLPTRL,TBLPTRH,TABLAT; 9 instr
+func	0x2b7a	ui_to_param_read_min_2b7a	Auto: calls param_read_min; 5 instr
+func	0x2b86	ui_to_ui_draw_set_hint_2b86	Auto: calls ui_draw_set_hint; 4 instr
+func	0x2b9c	ui_pop3_return_2b9c	Auto: Drop stack arguments and return; 4 instr
+func	0x2bae	ui_set_menu_value_lo_2bae	Auto: writes menu_value_lo,menu_value_hi; 4 instr
+func	0x2bce	ui_to_screen_mix_temp_bar_2bce	Auto: calls screen_mix_temp_bar; 5 instr
+func	0x2bdc	ui_stack_adjust_2bdc	Auto: Software stack push/pop helper; 6 instr
+func	0x2bea	ui_chain_fn2b16_fn28aa_ui_get_menu_item_2bea	Auto: Calls 0x2b16, 0x28aa, ui_get_menu_item; 3 instr
+func	0x2bf2	ui_to_lcd_clear_2bf2	Auto: calls lcd_clear; 2 instr
+func	0x2bfa	ui_get_cfg_systemconfig3_2bfa	Auto: reads cfg_systemconfig3; 3 instr
+func	0x2c02	ui_get_cfg_systemconfig5_2c02	Auto: reads cfg_systemconfig5; 3 instr
+func	0x2c0a	ui_set_menu_cb_enter_2c0a	Auto: writes menu_cb_enter,menu_cb_enter_hi,menu_cb_back,menu_cb_back_hi; 5 instr
+func	0x2c14	ui_get_TBLPTRL_2c14	Auto: reads TBLPTRL,TBLPTRH; 4 instr
+func	0x2c1c	ui_to_ui_get_cfg_systemconfig2_2c1c	Auto: Small wrapper around ui_get_cfg_systemconfig2; 3 instr
+func	0x3470	ui_to_heating_start_task_3470	Auto: writes ui_screen; reads ui_screen; calls heating_start_task,cooling_start_task; 15 instr
+func	0x3496	ui_set_ui_screen_3496	Auto: writes ui_screen; 5 instr
+func	0x34a2	ui_set_ui_screen_34a2	Auto: writes ui_screen; 5 instr
+func	0x3ada	ui_word_tue_3ada	Auto: shows "TUE"; reads ui_header_text; calls text_draw_word; 12 instr
+func	0x3afc	ui_set_ui_message_timer_3afc	Auto: writes ui_message_timer,ui_screen; reads ui_header_text; 8 instr
+func	0x4850	ui_get_buzzer_pattern_4850	Auto: reads buzzer_pattern; 4 instr
+func	0x4894	ui_set_ui_alarm_index_4894	Auto: writes ui_alarm_index,ui_blink_phase; reads ui_screen; 15 instr
+func	0x4ae6	ui_get_ui_screen_4ae6	Auto: reads ui_screen; 3 instr
+func	0x4af0	ui_to_ui_select_home_screen_4af0	Auto: calls ui_select_home_screen; 1 instr
+func	0x4bcc	ui_return_0x01_4bcc	Auto: Return constant 0x01; 1 instr
+func	0x4bce	ui_get_ui_heater_indicator_4bce	Auto: reads ui_heater_indicator; 4 instr
+func	0x4bd8	ui_get_ui_compressor_indicator_4bd8	Auto: reads ui_compressor_indicator; 4 instr
+func	0x4be2	ui_get_ui_clock_block_tmp_4be2	Auto: reads ui_clock_block_tmp; 3 instr
+func	0x4be8	ui_frame_access_4be8	Auto: Access stack-frame local/argument; 5 instr
+func	0x4c34	ui_bank1_ui_get_cfg_systemconfig5_4c34	Auto: Select bank then jump to ui_get_cfg_systemconfig5; 2 instr
+func	0x4c3a	ui_calc_array_ptr_4c3a	Auto: Compute array element address in FSR0; 7 instr
+func	0x4c48	ui_callw_mod_set_lcd_text_flag_4c48	Auto: Push W as argument and call mod_set_lcd_text_flag; 5 instr
+func	0x4c54	ui_to_mod_get_lcd_text_width_4c54	Auto: Small wrapper around mod_get_lcd_text_width; 6 instr
+func	0x4c62	ui_callw_fncfc6_4c62	Auto: Push W as argument and call 0xcfc6; 5 instr
+func	0x4c6e	ui_to_gfx_draw_frame_right_4c6e	Auto: calls gfx_draw_frame_right,gfx_draw_frame_left; 14 instr
+func	0x4c90	ui_frag_4c90	Auto: compiler fragment: RCALL 0x004f80 ; MOVFF FSR1L,FSR2L ; MOVFF FSR1H,FSR2H ; RETURN 0x0
+func	0x4c9c	ui_to_fmt_byte_4c9c	Auto: calls fmt_byte; 4 instr
+func	0x4ca8	ui_to_lcd_draw_glyph_4ca8	Auto: writes text_fill_width; calls lcd_draw_glyph; 12 instr
+func	0x4d04	ui_to_clock_display_off_4d04	Auto: calls clock_display_off; 4 instr
+func	0x4d10	ui_get_c18_tmp0_4d10	Auto: reads c18_tmp0,c18_tmp1,cfg_systemconfig3; 8 instr
+func	0x4d6e	ui_c18_epilogue_4d6e	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0x4d7a	ui_to_ser_to_text_draw_word_4d7a	Auto: Small wrapper around ser_to_text_draw_word; 3 instr
+func	0x4d80	ui_to_child_protect_is_active_4d80	Auto: reads cfg_systemconfig; calls child_protect_is_active; 6 instr
+func	0x4d8e	ui_to_ui_draw_temp_units_4d8e	Auto: reads c18_tmp0,c18_tmp1; calls ui_draw_temp_units; 9 instr
+func	0x4daa	ui_to_ltoa_4daa	Auto: reads math_res0,math_res1,math_aarg_lo,math_aarg_hi; calls ltoa; 10 instr
+func	0x4dc8	ui_push_args_85_ui_set_ui_message_timer_4dc8	Auto: Push constant arguments [133] then call ui_set_ui_message_timer; 5 instr
+func	0x4dd4	ui_to_eeprom_read_raw_4dd4	Auto: calls eeprom_read_raw; 4 instr
+func	0x4dde	ui_stack_adjust_4dde	Auto: Software stack push/pop helper; 3 instr
+func	0x4de4	ui_param_tboil_4de4	Auto: reads params TBOIL,TDELTAHOTTOPNORMALCUTOUT; reads c18_tmp0; 10 instr
+func	0x4dfa	ui_to_ser_set_ui_screen_4dfa	Auto: Small wrapper around ser_set_ui_screen; 4 instr
+func	0x4e02	ui_get_cfg_systemconfig2_4e02	Auto: reads cfg_systemconfig2; 7 instr
+func	0x4e10	ui_set_ui_screen_4e10	Auto: writes ui_screen,ui_alarm_index,ui_blink_phase; 5 instr
+func	0x4e1a	ui_get_TBLPTRH_4e1a	Auto: reads TBLPTRH,TABLAT; 12 instr
+func	0x4e32	ui_to_ui_get_buzzer_pattern_4e32	Auto: Small wrapper around ui_get_buzzer_pattern; 5 instr
+func	0x4e3c	ui_frame_access_4e3c	Auto: Access stack-frame local/argument; 6 instr
+func	0x4e4c	ui_to_ui_draw_label_value_4e4c	Auto: calls ui_draw_label_value; 3 instr
+func	0x4e54	ui_to_gfx_anim_icon_a_4e54	Auto: writes ui_dispense_state; reads ui_dispense_state; calls gfx_anim_icon_a; 8 instr
+func	0x4e66	ui_to_gfx_anim_icon_b_4e66	Auto: writes ui_dispense_state; reads ui_dispense_state; calls gfx_anim_icon_b; 8 instr
+func	0x4e78	ui_stack_adjust_4e78	Auto: Software stack push/pop helper; 6 instr
+func	0x4e84	ui_to_clock_display_off_4e84	Auto: writes ui_screen; calls clock_display_off; 3 instr
+func	0x4e8c	ui_get_cfg_systemconfig2_4e8c	Auto: reads cfg_systemconfig2; 5 instr
+func	0x4e96	ui_get_cfg_systemconfig3_4e96	Auto: reads cfg_systemconfig3; 5 instr
+func	0x4ea0	ui_stack_adjust_4ea0	Auto: Software stack push/pop helper; 5 instr
+func	0x4eaa	ui_to_fmt_int_4eaa	Auto: calls fmt_int; 3 instr
+func	0x4eb2	ui_param_dbnccntr_4eb2	Auto: reads params DBNCCNTR; writes keys_changed; 5 instr
+func	0x4ebc	ui_to_dispense_hot_request_4ebc	Auto: writes ui_screen,ui_countdown_100ms; calls dispense_hot_request; 6 instr
+func	0x4eca	ui_stack_adjust_4eca	Auto: Software stack push/pop helper; 5 instr
+func	0x4ed4	ui_get_c18_tmp0_4ed4	Auto: reads c18_tmp0,c18_tmp1; 6 instr
+func	0x4ee4	ui_get_ui_screen_4ee4	Auto: reads ui_screen; 4 instr
+func	0x4eec	ui_stack_adjust_4eec	Auto: Software stack push/pop helper; 4 instr
+func	0x4ef4	ui_set_ui_blink_phase_4ef4	Auto: writes ui_blink_phase; reads ui_blink_phase; 4 instr
+func	0x4efc	ui_to_ui_to_eeprom_read_param_4efc	Auto: Small wrapper around ui_to_eeprom_read_param; 4 instr
+func	0x4f04	ui_get_PORTH_4f04	Auto: reads PORTH,PORTB,PORTC; 7 instr
+func	0x4f12	ui_get_PORTH_4f12	Auto: reads PORTH,PORTB,PORTC; 5 instr
+func	0x4f1c	ui_set_heater_output_enable_4f1c	Auto: writes heater_output_enable; reads TRISG; 5 instr
+func	0x4f26	ui_stack_adjust_4f26	Auto: Software stack push/pop helper; 5 instr
+func	0x4f30	ui_to_dispense_stop_all_4f30	Auto: calls dispense_stop_all,inlet_valve_close; 2 instr
+func	0x4f38	ui_get_ui_screen_4f38	Auto: reads ui_screen; 4 instr
+func	0x4f40	ui_to_child_protect_is_active_4f40	Auto: calls child_protect_is_active; 3 instr
+func	0x4f48	ui_get_c18_tmp0_4f48	Auto: reads c18_tmp0,c18_tmp1; 7 instr
+func	0x4f5a	ui_stack_adjust_4f5a	Auto: Software stack push/pop helper; 4 instr
+func	0x4f64	ui_to_eeprom_read_param_4f64	Auto: calls eeprom_read_param; 4 instr
+func	0x4f6e	ui_frag_4f6e	Auto: compiler fragment: RCALL 0x004be8 ; MOVLW #0x32 ; MOVWF INDF0,ACCESS ; GOTO 0x004be8
+func	0x4f78	ui_test_value_4f78	Auto: compiler fragment: RCALL 0x004c3a ; MOVLW #0xfe ; XORWF POSTINC0,w,ACCESS ; RETURN 0x0
+func	0x4f80	ui_stack_adjust_4f80	Auto: Software stack push/pop helper; 3 instr
+func	0x4f8a	ui_get_cfg_systemconfig5_4f8a	Auto: reads cfg_systemconfig5; 8 instr
+func	0x4f9a	ui_test_value_4f9a	Auto: compiler fragment: RCALL 0x004c34 ; SUBLW #0x3 ; RETURN 0x0
+func	0x4fa0	ui_to_gfx_bitmap_blit_4fa0	Auto: calls gfx_bitmap_blit; 3 instr
+func	0x4fa8	ui_to_text_draw_char_4fa8	Auto: calls text_draw_char; 4 instr
+func	0x4fb2	ui_to_txt_to_text_draw_char_4fb2	Auto: Small wrapper around txt_to_text_draw_char; 4 instr
+func	0x4fbc	ui_to_ui_to_fmt_byte_4fbc	Auto: Small wrapper around ui_to_fmt_byte; 5 instr
+func	0x4fc6	ui_get_math_tmp2_4fc6	Auto: reads math_tmp2,math_tmp3,math_rem_lo,math_rem_hi; 7 instr
+func	0x4fdc	ui_get_math_res0_4fdc	Auto: reads math_res0,math_res1,math_aarg_lo,math_aarg_hi; 6 instr
+func	0x4ff2	ui_frag_4ff2	Auto: compiler fragment: RCALL 0x004be8 ; MOVLW #0x31 ; MOVWF INDF0,ACCESS ; GOTO 0x004be8
+func	0x4ffc	ui_to_temp_c_to_f_4ffc	Auto: calls temp_c_to_f; 2 instr
+func	0x5002	ser_param_tcoldpress_5002	Auto: reads params TCOLDPRESS; calls dispense_hot_allow,dispense_warm_cup; 5 instr
+func	0x5010	ser_get_c18_tmp1_5010	Auto: reads c18_tmp1,c18_tmp0; 7 instr
+func	0x5022	ser_ptr_add_5022	Auto: compiler fragment: ADDWF FSR2L,w,ACCESS ; MOVWF FSR0L,ACCESS ; MOVLW #0x0 ; ADDWFC FSR2H,w,ACCESS ; MOVWF FSR0H,ACCESS ; RETURN 0x0
+func	0x502e	ser_stack_adjust_502e	Auto: Software stack push/pop helper; 4 instr
+func	0x5036	ser_to_mod_set_lcd_text_flag_5036	Auto: Small wrapper around mod_set_lcd_text_flag; 4 instr
+func	0x5040	ser_param_tpowerdelay_5040	Auto: reads params TPOWERDELAY; 4 instr
+func	0x5048	ser_to_text_draw_word_5048	Auto: calls text_draw_word; 4 instr
+func	0x5052	ser_push_args_01_txt_to_text_draw_char_5052	Auto: Push constant arguments [1] then call txt_to_text_draw_char; 3 instr
+func	0x505a	ser_stack_adjust_505a	Auto: Software stack push/pop helper; 5 instr
+func	0x5066	ser_word_child_protect_5066	Auto: shows "CHILD PROTECT!"; 7 instr
+func	0x5074	ser_set_ui_blink_phase_5074	Auto: writes ui_blink_phase; 6 instr
+func	0x5080	ser_set_ui_screen_5080	Auto: writes ui_screen,ui_dispense_state,ui_hold_counter; 7 instr
+func	0x508e	ser_stack_adjust_508e	Auto: Software stack push/pop helper; 4 instr
+func	0x5096	ser_chain_ui_to_lcd_draw_gly_fn4ea0_5096	Auto: Calls ui_to_lcd_draw_glyph, 0x4ea0; 2 instr
+func	0x509c	ser_to_ui_to_eeprom_read_raw_509c	Auto: Small wrapper around ui_to_eeprom_read_raw; 4 instr
+func	0x50a4	ser_test_value_50a4	Auto: compiler fragment: RCALL 0x004c34 ; IORLW #0x0 ; RETURN 0x0
+func	0x50aa	ser_test_value_50aa	Auto: compiler fragment: RCALL 0x004c3a ; MOVLW #0xff ; XORWF POSTINC0,w,ACCESS ; RETURN 0x0
+func	0x50b2	ser_chain_fn4f80_fn5036_50b2	Auto: Calls 0x4f80, 0x5036; 2 instr
+func	0x50b8	ser_pop3_return_50b8	Auto: Drop stack arguments and return; 4 instr
+func	0x7842	ser_chain_fn7ac8_fn7aa8_7842	Auto: Calls 0x7ac8, 0x7aa8; 2 instr
+func	0x7848	ser_chain_ser_to_fmt_byte_ser_to_uart2_puts__ser_get_TBLPTRL_784	Auto: Calls ser_to_fmt_byte, ser_to_uart2_puts_ram, ser_get_TBLPTRL; 3 instr
+func	0x784e	ser_stack_adjust_784e	Auto: Software stack push/pop helper; 9 instr
+func	0x7860	serial_parse_index_arg	Parse numeric index argument (atol from rx buffer byte 3) into serial_cmd_hash
+func	0x7870	ser_compare_multibyte_7870	Auto: compiler fragment: MOVWF 0x001d,ACCESS ; CLRF 0x001e,ACCESS ; CLRF 0x001f,ACCESS ; MOVF 0x001c,w,ACCESS ; SUBWF 0x003c,w,ACCESS ; MOVWF 0x0014,ACCESS ; MOVF 0x001d,w,ACCESS ; SUBWFB 0x003d,w,ACCESS ; MOVWF 0x0015,ACCESS ; MOVF 0x001e,w,ACCESS ; SUBW
+func	0x7890	ser_get_serial_ptr_lo_7890	Auto: reads serial_ptr_lo,serial_ptr_hi; 13 instr
+func	0x78ae	ser_to_serial_hex_digit_78ae	Auto: reads c18_tmp3,c18_tmp2,c18_tmp1,c18_tmp0; calls serial_hex_digit; 12 instr
+func	0x78ce	ser_to_ltoa_78ce	Auto: calls ltoa; 10 instr
+func	0x78ec	ser_compare_multibyte_78ec	Auto: compiler fragment: MOVF 0x0018,w,ACCESS ; SUBWF 0x0014,w,ACCESS ; MOVF 0x0019,w,ACCESS ; SUBWFB 0x0015,w,ACCESS ; MOVF 0x001a,w,ACCESS ; SUBWFB 0x0016,w,ACCESS ; MOVF 0x001b,w,ACCESS ; SUBWFB 0x0017,w,ACCESS ; RETURN 0x0
+func	0x78fe	ser_c18_prologue_78fe	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0x7910	ser_to_uart2_puts_rom_7910	Auto: calls uart2_puts_rom; 2 instr
+func	0x7914	ser_to_uart2_puts_rom_7914	Auto: calls uart2_puts_rom; 2 instr
+func	0x791a	ser_get_c18_tmp0_791a	Auto: reads c18_tmp0,c18_tmp1,c18_tmp2; 4 instr
+func	0x7928	ser_ptr_add_7928	Auto: compiler fragment: MULLW #0x4 ; MOVFF PRODL,FSR0L ; MOVFF PRODH,FSR0H ; MOVLW #0xb2 ; ADDWF FSR0L,f,ACCESS ; MOVLW #0x0 ; ADDWFC FSR0H,f,ACCESS ; RETURN 0x0
+func	0x793c	ser_get_serial_ptr_lo_793c	Auto: reads serial_ptr_lo,serial_ptr_hi; 5 instr
+func	0x794a	ser_c18_epilogue_794a	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0x7956	ser_calc_array_ptr_7956	Auto: Compute array element address in FSR0; 6 instr
+func	0x7962	ser_get_serial_cmd_hash_7962	Auto: reads serial_cmd_hash,TBLPTRL,TBLPTRH; 10 instr
+func	0x797a	ser_get_local1_797a	Auto: reads local1,local2; 4 instr
+func	0x7986	ser_to_memcpy_7986	Auto: calls memcpy; 10 instr
+func	0x799c	ser_get_TBLPTRL_799c	Auto: reads TBLPTRL,TBLPTRH; 8 instr
+func	0x79b0	ser_to_ser_get_serial_ptr_lo_79b0	Auto: Small wrapper around ser_get_serial_ptr_lo; 3 instr
+func	0x79b6	ser_to_eeprom_read_raw_79b6	Auto: reads serial_cmd_hash; calls eeprom_read_raw; 4 instr
+func	0x79c2	ser_to_param_table_lookup_79c2	Auto: reads serial_cmd_hash; calls param_table_lookup; 4 instr
+func	0x79ce	ser_to_memcpypgm2ram_79ce	Auto: calls memcpypgm2ram; 6 instr
+func	0x79dc	ser_shift_multibyte_79dc	Auto: compiler fragment: BCF STATUS,#0x0,ACCESS ; RRCF 0x0017,f,ACCESS ; RRCF 0x0016,f,ACCESS ; RRCF 0x0015,f,ACCESS ; RRCF 0x0014,f,ACCESS ; DECF WREG,f,ACCESS ; RETURN 0x0
+func	0x79f4	ser_get_TBLPTRL_79f4	Auto: reads TBLPTRL; 4 instr
+func	0x79fe	ser_push_args_6c_01_79fe	Auto: Push constant arguments [108, 1]; 5 instr
+func	0x7a08	ser_to_fmt_byte_7a08	Auto: calls fmt_byte; 6 instr
+func	0x7a16	ser_get_TBLPTRL_7a16	Auto: reads TBLPTRL; 8 instr
+func	0x7a26	ser_to_ser_get_serial_ptr_lo_7a26	Auto: Small wrapper around ser_get_serial_ptr_lo; 9 instr
+func	0x7a3a	ser_to_atol_7a3a	Auto: calls atol; 6 instr
+func	0x7a48	ser_frag_7a48	Auto: compiler fragment: MOVWF 0x0024,ACCESS ; RCALL 0x007842 ; MOVLB #0x1 ; RETURN 0x0
+func	0x7a50	ser_get_TBLPTRH_7a50	Auto: reads TBLPTRH; 3 instr
+func	0x7a58	ser_to_ser_get_serial_ptr_lo_7a58	Auto: Small wrapper around ser_get_serial_ptr_lo; 7 instr
+func	0x7a66	ser_frag_7a66	Auto: compiler fragment: RCALL 0x007928 ; CLRF POSTINC0,ACCESS ; CLRF POSTINC0,ACCESS ; CLRF POSTINC0,ACCESS ; CLRF POSTINC0,ACCESS ; RETURN 0x0
+func	0x7a72	ser_frame_load_ptr_arg_7a72	Auto: Load pointer argument from stack frame into FSR0; 5 instr
+func	0x7a80	ser_to_serial_read_counter_desc_7a80	Auto: calls serial_read_counter_desc; 2 instr
+func	0x7a88	ser_get_c18_tmp3_7a88	Auto: reads c18_tmp3; 3 instr
+func	0x7a90	ser_chain_fn784e_ser_to_serial_hex__7a90	Auto: Calls 0x784e, ser_to_serial_hex_digit; 2 instr
+func	0x7a96	ser_get_serial_cmd_hash_7a96	Auto: reads serial_cmd_hash; 4 instr
+func	0x7aa2	ser_to_uart2_puts_ram_7aa2	Auto: calls uart2_puts_ram; 2 instr
+func	0x7aa8	ser_to_ser_get_TBLPTRL_7aa8	Auto: Small wrapper around ser_get_TBLPTRL; 5 instr
+func	0x7ab2	ser_to_uart2_puts_rom_7ab2	Auto: reads TBLPTRH; calls uart2_puts_rom; 5 instr
+func	0x7abc	ser_get_serial_ptr_lo_7abc	Auto: reads serial_ptr_lo,serial_ptr_hi; 4 instr
+func	0x7ac8	ser_to_ser_to_fmt_byte_7ac8	Auto: Small wrapper around ser_to_fmt_byte; 4 instr
+func	0x7ad2	ser_get_TABLAT_7ad2	Auto: reads TABLAT; 5 instr
+func	0x92da	txt_to_mod_set_lcd_text_flag_92da	Auto: Small wrapper around mod_set_lcd_text_flag; 5 instr
+func	0x92e6	txt_to_mod_set_lcd_text_flag_92e6	Auto: Small wrapper around mod_set_lcd_text_flag; 5 instr
+func	0x92f2	txt_to_mod_set_lcd_text_flag_92f2	Auto: Small wrapper around mod_set_lcd_text_flag; 5 instr
+func	0x92fe	txt_to_mod_set_lcd_text_flag_92fe	Auto: Small wrapper around mod_set_lcd_text_flag; 5 instr
+func	0x930a	txt_to_mod_set_lcd_text_flag_930a	Auto: Small wrapper around mod_set_lcd_text_flag; 5 instr
+func	0x93ba	txt_to_text_draw_char_93ba	Auto: calls text_draw_char; 6 instr
+func	0x98dc	txt_to_lcd_printf_98dc	Auto: reads text_render_flag; calls lcd_printf,text_draw_string; 16 instr
+func	0x98fc	txt_set_ui_hold_counter_98fc	Auto: writes ui_hold_counter,buzzer_pattern; 11 instr
+func	0x9914	txt_set_ui_hold_counter_9914	Auto: writes ui_hold_counter,buzzer_pattern; reads printf_fmt_lo,printf_fmt_hi; 14 instr
+func	0x9936	txt_to_lcd_printf_9936	Auto: writes printf_args_lo,printf_args_hi; calls lcd_printf,text_measure_width; 20 instr
+func	0x9964	txt_to_txt_get_c18_tmp0_9964	Auto: Small wrapper around txt_get_c18_tmp0; 5 instr
+func	0x9972	txt_c18_epilogue_9972	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0x997e	txt_set_ui_header_text_997e	Auto: writes ui_header_text; reads text_char,TABLAT; 7 instr
+func	0x998e	txt_get_TBLPTRH_998e	Auto: reads TBLPTRH,TBLPTRL; 7 instr
+func	0x999c	txt_get_printf_fmt_lo_999c	Auto: reads printf_fmt_lo,printf_fmt_hi; 4 instr
+func	0x99a8	txt_frame_push_args_99a8	Auto: Copy stack-frame arguments onto the stack for a call; 5 instr
+func	0x99b6	txt_get_printf_out_lo_99b6	Auto: reads printf_out_lo,printf_out_hi; 3 instr
+func	0x99c0	txt_frame_access_99c0	Auto: Access stack-frame local/argument; 5 instr
+func	0x99ca	txt_get_TBLPTRH_99ca	Auto: reads TBLPTRH,c18_tmp0,TABLAT,c18_tmp1; 8 instr
+func	0x99e2	txt_frame_access_99e2	Auto: Access stack-frame local/argument; 4 instr
+func	0x99ea	txt_get_printf_out_lo_99ea	Auto: reads printf_out_lo,printf_out_hi,printf_args_lo,printf_args_hi; 7 instr
+func	0x9a00	txt_frag_9a00	Auto: compiler fragment: RCALL 0x009a5a ; MOVLB #0xe ; MOVF FSR1L,w,ACCESS ; RETURN 0x0
+func	0x9a08	txt_get_text_char_9a08	Auto: reads text_char,TABLAT; 5 instr
+func	0x9a14	txt_get_printf_tmp_lo_9a14	Auto: reads printf_tmp_lo,TBLPTRL,printf_tmp_hi,TBLPTRH,text_char,TABLAT; 6 instr
+func	0x9a26	txt_push_args_12_0e_9a26	Auto: Push constant arguments [18, 14]; 5 instr
+func	0x9a30	txt_get_text_row_9a30	Auto: reads text_row; 5 instr
+func	0x9a3e	txt_set_text_x_end_9a3e	Auto: writes text_x_end; 6 instr
+func	0x9a4c	txt_get_printf_args_lo_9a4c	Auto: reads printf_args_lo,printf_args_hi; 5 instr
+func	0x9a5a	txt_c18_prologue_9a5a	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0x9a6c	txt_to_cfg_language_9a6c	Auto: calls cfg_language,word_lookup_a; 8 instr
+func	0x9a80	txt_set_keys_current_9a80	Auto: writes keys_current; 5 instr
+func	0x9a8a	txt_set_keys_sample_9a8a	Auto: writes keys_sample,keys_current; reads text_char; 8 instr
+func	0x9a9c	txt_frame_push_args_9a9c	Auto: Copy stack-frame arguments onto the stack for a call; 5 instr
+func	0x9aa8	txt_stack_adjust_9aa8	Auto: Software stack push/pop helper; 4 instr
+func	0x9ab0	txt_get_printf_fmt_lo_9ab0	Auto: reads printf_fmt_lo,TBLPTRL,printf_fmt_hi,TBLPTRH; 3 instr
+func	0x9ac8	txt_get_c18_tmp0_9ac8	Auto: reads c18_tmp0,c18_tmp1; 4 instr
+func	0x9ad4	os_set_OScTcbP_9ad4	Auto: writes OScTcbP,OScTcbP_hi,os_tmp_tcb_ptr,os_tmp_tcb_ptr_hi,OSdelayQP,OSdelayQP_hi; 14 instr
+func	0x9b2c	os_frame_access_9b2c	Auto: Access stack-frame local/argument; 27 instr
+func	0xa0e2	os_calc_array_ptr_a0e2	Auto: Compute array element address in FSR0; 26 instr
+func	0xa160	os_frame_load_ptr_arg_a160	Auto: Load pointer argument from stack frame into FSR0; 5 instr
+func	0xa16e	os_c18_prologue_a16e	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xa180	os_c18_epilogue_a180	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xa19c	os_frame_load_ptr_arg_a19c	Auto: Load pointer argument from stack frame into FSR0; 5 instr
+func	0xa1ba	os_ptr_add_a1ba	Auto: compiler fragment: RCALL 0x00a302 ; RCALL 0x00a2a4 ; RCALL 0x00a272 ; ADDWF FSR0L,f,ACCESS ; MOVLW #0x0 ; ADDWFC FSR0H,f,ACCESS ; GOTO 0x00a2fc
+func	0xa1ca	os_const_then_a2dc_a1ca	Auto: compiler fragment: MOVLW #0x5 ; BRA 0x00a2dc
+func	0xa1ce	os_get_os_tmp_tcb_ptr_a1ce	Auto: reads os_tmp_tcb_ptr,os_tmp_tcb_ptr_hi; 3 instr
+func	0xa1d8	os_frame_push_args_a1d8	Auto: Copy stack-frame arguments onto the stack for a call; 5 instr
+func	0xa1e6	os_to_OSInsPrioQ_a1e6	Auto: calls OSInsPrioQ; 4 instr
+func	0xa1ee	os_const_then_a2dc_a1ee	Auto: compiler fragment: MOVLW #0x3 ; BRA 0x00a2dc
+func	0xa1f2	os_frame_access_a1f2	Auto: Access stack-frame local/argument; 6 instr
+func	0xa200	os_frame_access_a200	Auto: Access stack-frame local/argument; 5 instr
+func	0xa20e	os_ptr_add_a20e	Auto: compiler fragment: MOVWF FSR0L,ACCESS ; MOVLW #0x0 ; ADDWFC FSR2H,w,ACCESS ; MOVWF FSR0H,ACCESS ; MOVF POSTINC0,w,ACCESS ; IORWF POSTDEC0,w,ACCESS ; RETURN 0x0
+func	0xa21c	os_const_then_a2dc_a21c	Auto: compiler fragment: MOVLW #0x2 ; BRA 0x00a2dc
+func	0xa220	os_stack_adjust_a220	Auto: Software stack push/pop helper; 9 instr
+func	0xa232	os_get_c18_tmp0_a232	Auto: reads c18_tmp0,c18_tmp1; 7 instr
+func	0xa244	os_frame_push_args_a244	Auto: Copy stack-frame arguments onto the stack for a call; 5 instr
+func	0xa252	os_frame_load_ptr_arg_a252	Auto: Load pointer argument from stack frame into FSR0; 5 instr
+func	0xa260	os_frag_a260	Auto: compiler fragment: MOVLW #0x8f ; ANDWF INDF0,w,ACCESS ; IORLW #0x10 ; MOVWF INDF0,ACCESS ; RETURN 0x0
+func	0xa26a	os_frag_a26a	Auto: compiler fragment: RCALL 0x00a302 ; MOVF POSTINC0,w,ACCESS ; IORWF POSTDEC0,w,ACCESS ; RETURN 0x0
+func	0xa272	os_copy_ptr_field_a272	Auto: compiler fragment: MOVFF POSTINC2,FSR0L ; MOVFF POSTDEC2,FSR0H ; RETURN 0x0
+func	0xa27c	os_copy_ptr_field_a27c	Auto: compiler fragment: MOVFF POSTINC0,POSTINC2 ; MOVFF POSTDEC0,POSTDEC2 ; RETURN 0x0
+func	0xa286	os_chain_fna160_fna21c_a286	Auto: Calls 0xa160, 0xa21c; 2 instr
+func	0xa28c	os_stack_adjust_a28c	Auto: Software stack push/pop helper; 3 instr
+func	0xa292	os_frag_a292	Auto: compiler fragment: RCALL 0x00a1ca ; MOVLW #0x4 ; RETURN 0x0
+func	0xa298	os_copy_ptr_field_a298	Auto: compiler fragment: RCALL 0x00a1ee ; MOVFF POSTINC2,POSTINC0 ; MOVFF POSTDEC2,POSTDEC0 ; RETURN 0x0
+func	0xa2a4	os_frame_access_a2a4	Auto: Access stack-frame local/argument; 5 instr
+func	0xa2b2	os_to_OSDisableInts_a2b2	Auto: calls OSDisableInts; 3 instr
+func	0xa2ba	os_get_os_tmp_tcb_ptr_a2ba	Auto: reads os_tmp_tcb_ptr,os_tmp_tcb_ptr_hi; 3 instr
+func	0xa2c6	os_tcb_get_state_a2c6	Auto: compiler fragment: MOVF INDF0,w,ACCESS ; ANDLW #0x70 ; RRNCF WREG,f,ACCESS ; RRNCF WREG,f,ACCESS ; RRNCF WREG,f,ACCESS ; RRNCF WREG,f,ACCESS ; RETURN 0x0
+func	0xa2d4	os_to_OSRestoreInts_a2d4	Auto: calls OSRestoreInts; 4 instr
+func	0xa2dc	os_ptr_add_a2dc	Auto: compiler fragment: ADDWF FSR0L,f,ACCESS ; MOVLW #0x0 ; ADDWFC FSR0H,f,ACCESS ; RETURN 0x0
+func	0xa2e4	os_pop3_return_a2e4	Auto: Drop stack arguments and return; 4 instr
+func	0xa2ec	os_chain_fna272_fna292_a2ec	Auto: Calls 0xa272, 0xa292; 2 instr
+func	0xa2f2	os_frame_access_a2f2	Auto: Access stack-frame local/argument; 4 instr
+func	0xa2fc	os_chain_fna27c_fna26a_a2fc	Auto: Calls 0xa27c, 0xa26a; 2 instr
+func	0xa302	os_frag_a302	Auto: compiler fragment: MOVFF FSR2L,FSR0L ; MOVFF FSR2H,FSR0H ; RETURN 0x0
+func	0xa30c	mod_to_OSDisableInts_a30c	Auto: calls OSDisableInts; 2 instr
+func	0xa6f2	mod_get_clock_edit_hour_a6f2	Auto: reads clock_edit_hour; 3 instr
+func	0xa6f8	mod_get_clock_edit_hour_a6f8	Auto: reads clock_edit_hour; 2 instr
+func	0xa6fe	mod_set_clock_edit_ampm_a6fe	Auto: writes clock_edit_ampm; reads clock_edit_ampm,clock_edit_hour; 13 instr
+func	0xa718	mod_set_clock_edit_hour_a718	Auto: writes clock_edit_hour; reads clock_edit_hour; 12 instr
+func	0xa730	mod_set_clock_edit_hour_a730	Auto: writes clock_edit_hour; reads clock_edit_hour; 13 instr
+func	0xa74a	mod_get_clock_edit_minute_a74a	Auto: reads clock_edit_minute; 3 instr
+func	0xa750	mod_set_clock_edit_minute_a750	Auto: writes clock_edit_minute; reads clock_edit_minute; 8 instr
+func	0xa760	mod_set_clock_edit_minute_a760	Auto: writes clock_edit_minute; reads clock_edit_minute; 7 instr
+func	0xa76e	mod_get_clock_edit_minute_a76e	Auto: reads clock_edit_minute; 2 instr
+func	0xa774	mod_get_clock_edit_ampm_a774	Auto: reads clock_edit_ampm; 3 instr
+func	0xa77a	mod_get_clock_edit_ampm_a77a	Auto: reads clock_edit_ampm; 2 instr
+func	0xa780	mod_set_clock_edit_ampm_a780	Auto: writes clock_edit_ampm; reads clock_edit_ampm; 7 instr
+func	0xa78e	mod_set_clock_edit_ampm_a78e	Auto: writes clock_edit_ampm; reads clock_edit_ampm; 8 instr
+func	0xa7ee	mod_get_clock_pm_a7ee	Auto: reads clock_pm,clock_minute,clock_hour; 25 instr
+func	0xa880	mod_get_clock_colon_blink_a880	Auto: reads clock_colon_blink; 8 instr
+func	0xa892	mod_get_c18_tmp2_a892	Auto: reads c18_tmp2,c18_tmp3; 17 instr
+func	0xa8ba	mod_frame_load_ptr_arg_a8ba	Auto: Load pointer argument from stack frame into FSR0; 5 instr
+func	0xa8c8	mod_c18_prologue_a8c8	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xa8da	mod_stack_adjust_a8da	Auto: Software stack push/pop helper; 6 instr
+func	0xa8ea	mod_to_fmt_byte_a8ea	Auto: calls fmt_byte; 9 instr
+func	0xa902	mod_c18_epilogue_a902	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xa90e	mod_div_helper_a90e	Auto: compiler fragment: CALL 0x00fc24,0x0 ; MOVF 0x0009,w,ACCESS ; MOVWF 0x0026,ACCESS ; GOTO 0x00aa4e
+func	0xa91a	mod_to_mod_get_clock_hour_a91a	Auto: Small wrapper around mod_get_clock_hour; 8 instr
+func	0xa92e	mod_to_mod_get_c18_tmp0_a92e	Auto: Small wrapper around mod_get_c18_tmp0; 8 instr
+func	0xa940	mod_callw_mod_set_lcd_delay_counter_a940	Auto: Push W as argument and call mod_set_lcd_delay_counter; 5 instr
+func	0xa94c	mod_to_eeprom_read_raw_a94c	Auto: calls eeprom_read_raw; 4 instr
+func	0xa956	mod_to_lcd_draw_glyph_a956	Auto: calls lcd_draw_glyph; 14 instr
+func	0xa974	mod_stack_adjust_a974	Auto: Software stack push/pop helper; 7 instr
+func	0xa982	mod_frag_a982	Auto: compiler fragment: ADDWF 0x0024,w,ACCESS ; GOTO 0x00a9c2
+func	0xa988	mod_div_helper_a988	Auto: compiler fragment: CALL 0x00fc24,0x0 ; MOVF 0x0005,w,ACCESS ; MOVWF 0x0027,ACCESS ; RETURN 0x0
+func	0xa992	mod_ptr_add_a992	Auto: compiler fragment: MOVLW #0x2 ; ADDWF FSR0L,f,ACCESS ; MOVLW #0x0 ; ADDWFC FSR0H,f,ACCESS ; RETURN 0x0
+func	0xa99c	mod_get_clock_pm_a99c	Auto: reads clock_pm; 4 instr
+func	0xa9a4	mod_to_mod_set_lcd_delay_counter_a9a4	Auto: Small wrapper around mod_set_lcd_delay_counter; 6 instr
+func	0xa9b2	mod_get_clock_minute_a9b2	Auto: reads clock_minute; 5 instr
+func	0xa9c2	mod_callw_fncfc6_a9c2	Auto: Push W as argument and call 0xcfc6; 5 instr
+func	0xa9ce	mod_chain_fna8ba_fna992_a9ce	Auto: Calls 0xa8ba, 0xa992; 2 instr
+func	0xa9d4	mod_get_clock_hour_a9d4	Auto: reads clock_hour; 5 instr
+func	0xa9e2	mod_get_TBLPTRL_a9e2	Auto: reads TBLPTRL,TBLPTRH,TABLAT; 10 instr
+func	0xa9f6	mod_callw_lcd_write_data_a9f6	Auto: Push W as argument and call lcd_write_data; 5 instr
+func	0xaa02	mod_get_cfg_systemconfig3_aa02	Auto: reads cfg_systemconfig3; 7 instr
+func	0xaa10	mod_get_clock_hour_aa10	Auto: reads clock_hour,c18_tmp0; 7 instr
+func	0xaa20	mod_set_clock_edit_hour_aa20	Auto: writes clock_edit_hour; 6 instr
+func	0xaa2c	mod_set_clock_edit_minute_aa2c	Auto: writes clock_edit_minute; 6 instr
+func	0xaa38	mod_compare_multibyte_aa38	Auto: compiler fragment: MOVLW #0xc ; MOVWF 0x0014,ACCESS ; RCALL 0x00a8ba ; MOVF 0x0014,w,ACCESS ; SUBWF INDF0,f,ACCESS ; RETURN 0x0
+func	0xaa44	mod_get_c18_tmp0_aa44	Auto: reads c18_tmp0,c18_tmp1; 3 instr
+func	0xaa4e	mod_frag_aa4e	Auto: compiler fragment: MOVLW #0xa ; MOVWF 0x0014,ACCESS ; MOVWF 0x000e,ACCESS ; RETURN 0x0
+func	0xafc2	mod_chain_mod_to_dispense_re_mod_get_local4_afc2	Auto: Calls mod_to_dispense_read_param, mod_get_local4; 2 instr
+func	0xafd2	mod_set_portion_hot_lo_afd2	Auto: writes portion_hot_lo,portion_hot_hi; reads math_aarg_lo,math_aarg_hi; 6 instr
+func	0xafe2	mod_to_dispense_read_param_afe2	Auto: calls dispense_read_param; 3 instr
+func	0xafe8	mod_get_cfg_systemconfig5_afe8	Auto: reads cfg_systemconfig5; 10 instr
+func	0xaffc	mod_get_local3_affc	Auto: reads local3,local4; 3 instr
+func	0xb02c	mod_get_local4_b02c	Auto: reads local4,local3; 8 instr
+func	0xb04c	mod_to_portion_scale_b04c	Auto: calls portion_scale; 3 instr
+func	0xb060	mod_to_dispense_read_param_b060	Auto: calls dispense_read_param; 4 instr
+func	0xb480	mod_return_void_b480	Auto: Empty function (return); 1 instr
+func	0xb498	mod_to_uart2_rx_isr_b498	Auto: calls uart2_rx_isr; 1 instr
+func	0xb518	mod_to_child_protect_is_active_b518	Auto: calls child_protect_is_active; 8 instr
+func	0xb52a	mod_to_mod_to_param_write_b52a	Auto: Small wrapper around mod_to_param_write; 9 instr
+func	0xb5e8	mod_c18_prologue_b5e8	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xb60a	mod_c18_epilogue_b60a	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xb62c	mod_to_param_write_b62c	Auto: calls param_write; 7 instr
+func	0xba1a	mod_frame_load_ptr_arg_ba1a	Auto: Load pointer argument from stack frame into FSR0; 5 instr
+func	0xba28	mod_c18_prologue_ba28	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xba3a	mod_get_anim_index_ba3a	Auto: reads anim_index,TBLPTRL,TBLPTRH,TABLAT; 16 instr
+func	0xba5a	mod_stack_adjust_ba5a	Auto: Software stack push/pop helper; 4 instr
+func	0xba64	mod_to_gfx_clip_x_ba64	Auto: writes anim_pos; reads anim_pos; calls gfx_clip_x; 9 instr
+func	0xba78	mod_c18_epilogue_ba78	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xba84	mod_to_lcd_draw_glyph_ba84	Auto: calls lcd_draw_glyph; 7 instr
+func	0xba96	mod_ptr_add_ba96	Auto: compiler fragment: ADDWF FSR0L,f,ACCESS ; MOVLW #0x0 ; ADDWFC FSR0H,f,ACCESS ; MOVF INDF0,w,ACCESS ; RETURN 0x0
+func	0xbaa0	mod_frag_baa0	Auto: compiler fragment: MOVWF PRODL,ACCESS ; MOVLW #0xfb ; BRA 0x00bbfa
+func	0xbaa6	mod_callw_lcd_write_data_baa6	Auto: Push W as argument and call lcd_write_data; 4 instr
+func	0xbab0	mod_to_lcd_puts_rom_bab0	Auto: writes anim_pos; calls lcd_puts_rom; 11 instr
+func	0xbac8	mod_get_math_aarg_hi_bac8	Auto: reads math_aarg_hi,anim_index; 10 instr
+func	0xbae0	mod_to_lcd_puts_rom_bae0	Auto: calls lcd_puts_rom; 8 instr
+func	0xbaf2	mod_ptr_add_baf2	Auto: compiler fragment: MOVLW #0x2 ; ADDWF FSR0L,f,ACCESS ; MOVLW #0x0 ; ADDWFC FSR0H,f,ACCESS ; RETURN 0x0
+func	0xbafc	mod_frag_bafc	Auto: compiler fragment: ANDLW #0xf8 ; RRNCF WREG,f,ACCESS ; RRNCF WREG,f,ACCESS ; RRNCF WREG,f,ACCESS ; RETURN 0x0
+func	0xbb06	mod_to_lcd_write_data_bb06	Auto: Small wrapper around lcd_write_data; 4 instr
+func	0xbb10	mod_get_c18_tmp2_bb10	Auto: reads c18_tmp2,c18_tmp3; 3 instr
+func	0xbb1a	mod_get_cfg_systemconfig2_bb1a	Auto: reads cfg_systemconfig2; 8 instr
+func	0xbb2a	mod_frag_bb2a	Auto: compiler fragment: MOVLW #0x8 ; MOVWF PRODL,ACCESS ; MOVLW #0xfd ; BRA 0x00bbfa
+func	0xbb32	mod_frag_bb32	Auto: compiler fragment: MOVLW #0x7f ; MOVWF PRODL,ACCESS ; MOVLW #0xfc ; BRA 0x00bbfa
+func	0xbb3a	mod_to_gfx_clip_y_bb3a	Auto: calls gfx_clip_y; 2 instr
+func	0xbb40	mod_set_text_row_bb40	Auto: writes text_row,text_fill_width; 7 instr
+func	0xbb4e	mod_get_anim_flag_bb4e	Auto: reads anim_flag; 3 instr
+func	0xbb58	mod_set_anim_index_bb58	Auto: writes anim_index; reads anim_pos; 7 instr
+func	0xbb66	mod_frame_access_bb66	Auto: Access stack-frame local/argument; 13 instr
+func	0xbb80	mod_get_c18_tmp0_bb80	Auto: reads c18_tmp0; 6 instr
+func	0xbb8e	mod_get_anim_pos_bb8e	Auto: reads anim_pos; 4 instr
+func	0xbb9a	mod_frag_bb9a	Auto: compiler fragment: RCALL 0x00ba1a ; MOVLW #0x4 ; GOTO 0x00ba96
+func	0xbba2	mod_stack_adjust_bba2	Auto: Software stack push/pop helper; 3 instr
+func	0xbbaa	mod_set_anim_pos_bbaa	Auto: writes anim_pos; 8 instr
+func	0xbbba	mod_set_anim_index_bbba	Auto: writes anim_index; 8 instr
+func	0xbbce	mod_ptr_add_bbce	Auto: compiler fragment: RCALL 0x00ba1a ; MOVLW #0x4 ; ADDWF FSR0L,f,ACCESS ; MOVLW #0x0 ; ADDWFC FSR0H,f,ACCESS ; RETURN 0x0
+func	0xbbda	mod_set_anim_index_bbda	Auto: writes anim_index; 5 instr
+func	0xbbe4	mod_to_mod_to_lcd_draw_glyph_bbe4	Auto: Small wrapper around mod_to_lcd_draw_glyph; 5 instr
+func	0xbbee	mod_set_anim_index_bbee	Auto: writes anim_index; 5 instr
+func	0xbbfa	mod_frame_access_bbfa	Auto: Access stack-frame local/argument; 4 instr
+func	0xbc04	mod_pop4_return_bc04	Auto: Drop stack arguments and return; 5 instr
+func	0xbc0e	mod_stack_adjust_bc0e	Auto: Software stack push/pop helper; 5 instr
+func	0xbc1a	mod_frag_bc1a	Auto: compiler fragment: RCALL 0x00ba1a ; MOVF INDF0,w,ACCESS ; RETURN 0x0
+func	0xbc20	mod_callw_fnba5a_bc20	Auto: Push W as argument and call 0xba5a; 2 instr
+func	0xbfec	mod_param_tnormalcoldcutout_bfec	Auto: reads params TNORMALCOLDCUTOUT; calls eeprom_read_raw; 5 instr
+func	0xc0e6	mod_get_temp_new_reading_c0e6	Auto: reads temp_new_reading; 6 instr
+func	0xc0f4	mod_get_c18_tmp0_c0f4	Auto: reads c18_tmp0,TABLAT,c18_tmp1; 8 instr
+func	0xc108	mod_calc_array_ptr_c108	Auto: Compute array element address in FSR0; 7 instr
+func	0xc116	mod_c18_prologue_c116	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xc138	mod_c18_epilogue_c138	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xc144	mod_get_ntc_table_ptr_lo_c144	Auto: reads ntc_table_ptr_lo,TBLPTRL,ntc_table_ptr_hi,TBLPTRH; 3 instr
+func	0xc14e	mod_get_TBLPTRL_c14e	Auto: reads TBLPTRL,TBLPTRH; 5 instr
+func	0xc158	mod_calc_array_ptr_c158	Auto: Compute array element address in FSR0; 7 instr
+func	0xc166	mod_calc_array_ptr_c166	Auto: Compute array element address in FSR0; 7 instr
+func	0xc2bc	mod_bcd_digit_helper_c2bc	Auto: BCD/ASCII digit helper for number formatting; 3 instr
+func	0xc2c2	mod_frag_c2c2	Auto: compiler fragment: MOVF INDF0,w,ACCESS ; ANDLW #0xf ; BNZ 0x00c2cc ; MOVF POSTINC0,f,ACCESS ; BSF STATUS,#0x2,ACCESS ; RETURN 0x0
+func	0xc2ce	mod_bcd_digit_helper_c2ce	Auto: BCD/ASCII digit helper for number formatting; 5 instr
+func	0xc2d8	mod_bcd_digit_helper_c2d8	Auto: BCD/ASCII digit helper for number formatting; 5 instr
+func	0xc2e2	mod_stack_adjust_c2e2	Auto: Software stack push/pop helper; 22 instr
+func	0xc316	mod_frag_c316	Auto: compiler fragment: MOVLW #0x3 ; ADDWF INDF0,w,ACCESS ; BTFSC WREG,#0x3,ACCESS ; MOVWF INDF0,ACCESS ; MOVLW #0x30 ; ADDWF INDF0,w,ACCESS ; BTFSC WREG,#0x7,ACCESS ; MOVWF INDF0,ACCESS ; RETLW #0x0
+func	0xc3e2	mod_bcd_digit_helper_c3e2	Auto: BCD/ASCII digit helper for number formatting; 3 instr
+func	0xc3e8	mod_frag_c3e8	Auto: compiler fragment: MOVF INDF0,w,ACCESS ; ANDLW #0xf ; BNZ 0x00c3f2 ; MOVF POSTINC0,f,ACCESS ; BSF STATUS,#0x2,ACCESS ; RETURN 0x0
+func	0xc3f4	mod_bcd_digit_helper_c3f4	Auto: BCD/ASCII digit helper for number formatting; 5 instr
+func	0xc3fe	mod_bcd_digit_helper_c3fe	Auto: BCD/ASCII digit helper for number formatting; 5 instr
+func	0xc44a	mod_frag_c44a	Auto: compiler fragment: MOVLW #0x3 ; ADDWF INDF0,w,ACCESS ; BTFSC WREG,#0x3,ACCESS ; MOVWF INDF0,ACCESS ; MOVLW #0x30 ; ADDWF INDF0,w,ACCESS ; BTFSC WREG,#0x7,ACCESS ; MOVWF INDF0,ACCESS ; RETLW #0x0
+func	0xc570	mod_bcd_digit_helper_c570	Auto: BCD/ASCII digit helper for number formatting; 3 instr
+func	0xc576	mod_frag_c576	Auto: compiler fragment: MOVF INDF0,w,ACCESS ; ANDLW #0xf ; BNZ 0x00c580 ; MOVF POSTINC0,f,ACCESS ; BSF STATUS,#0x2,ACCESS ; RETURN 0x0
+func	0xc582	mod_bcd_digit_helper_c582	Auto: BCD/ASCII digit helper for number formatting; 5 instr
+func	0xc58c	mod_bcd_digit_helper_c58c	Auto: BCD/ASCII digit helper for number formatting; 5 instr
+func	0xc5f4	mod_frag_c5f4	Auto: compiler fragment: MOVLW #0x3 ; ADDWF INDF0,w,ACCESS ; BTFSC WREG,#0x3,ACCESS ; MOVWF INDF0,ACCESS ; MOVLW #0x30 ; ADDWF INDF0,w,ACCESS ; BTFSC WREG,#0x7,ACCESS ; MOVWF INDF0,ACCESS ; RETLW #0x0
+func	0xc932	mod_to_hot_temp_read_top_c932	Auto: calls hot_temp_read_top; 1 instr
+func	0xca00	mod_get_hot_temp_top_ca00	Auto: reads hot_temp_top; 4 instr
+func	0xca12	mod_push_args_80_00_ca12	Auto: Push constant arguments [128, 0]; 5 instr
+func	0xca24	mod_get_lcd_text_width_ca24	Auto: reads lcd_text_width,TABLAT; 11 instr
+func	0xca3a	mod_get_lcd_text_width_ca3a	Auto: reads lcd_text_width,TABLAT; 11 instr
+func	0xca50	mod_get_lcd_text_width_ca50	Auto: reads lcd_text_width,TABLAT; 12 instr
+func	0xca68	mod_set_lcd_text_flag_ca68	Auto: writes lcd_text_flag; 10 instr
+func	0xca7c	mod_set_lcd_text_flag_ca7c	Auto: writes lcd_text_flag; 10 instr
+func	0xca90	mod_set_lcd_text_flag_ca90	Auto: writes lcd_text_flag; 10 instr
+func	0xcaa4	mod_set_lcd_text_flag_caa4	Auto: writes lcd_text_flag; 10 instr
+func	0xcab8	mod_set_lcd_text_flag_cab8	Auto: writes lcd_text_flag; 14 instr
+func	0xcad4	mod_set_lcd_text_flag_cad4	Auto: writes lcd_text_flag,lcd_text_width; reads lcd_text_width; 14 instr
+func	0xcaf0	mod_set_lcd_text_flag_caf0	Auto: writes lcd_text_flag,lcd_text_width; reads lcd_text_width; 14 instr
+func	0xcb0c	mod_set_lcd_text_flag_cb0c	Auto: writes lcd_text_flag,lcd_text_width; reads lcd_text_width; 18 instr
+func	0xcbf2	mod_set_lcd_text_maxwidth_cbf2	Auto: writes lcd_text_maxwidth; reads lcd_text_maxwidth; 13 instr
+func	0xcc0c	mod_to_text_measure_width_cc0c	Auto: calls text_measure_width; 14 instr
+func	0xcc2c	mod_set_text_x_adjust_cc2c	Auto: writes text_x_adjust; reads text_x_adjust,text_width_saved; 22 instr
+func	0xccf2	mod_get_lcd_text_flag_ccf2	Auto: reads lcd_text_flag,TBLPTRL,TBLPTRH,TABLAT; 13 instr
+func	0xcd10	mod_calc_array_ptr_cd10	Auto: Compute array element address in FSR0; 10 instr
+func	0xcd24	mod_c18_epilogue_cd24	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xcd30	mod_frame_access_cd30	Auto: Access stack-frame local/argument; 10 instr
+func	0xcd48	mod_get_TBLPTRH_cd48	Auto: reads TBLPTRH,TBLPTRL,TABLAT; 8 instr
+func	0xcd58	mod_get_c18_tmp0_cd58	Auto: reads c18_tmp0,c18_tmp1,lcd_text_width; 11 instr
+func	0xcd74	mod_set_lcd_text_width_cd74	Auto: writes lcd_text_width; 4 instr
+func	0xcd7c	mod_get_c18_tmp0_cd7c	Auto: reads c18_tmp0,c18_tmp1,lcd_text_width; 11 instr
+func	0xcd96	mod_set_lcd_text_flag_cd96	Auto: writes lcd_text_flag; 5 instr
+func	0xcda0	mod_frag_cda0	Auto: compiler fragment: ANDLW #0xf0 ; RRNCF WREG,f,ACCESS ; RRNCF WREG,f,ACCESS ; RRNCF WREG,f,ACCESS ; RRNCF WREG,f,ACCESS ; RETURN 0x0
+func	0xcdac	mod_set_lcd_text_width_cdac	Auto: writes lcd_text_width; 6 instr
+func	0xcdba	mod_set_lcd_text_flag_cdba	Auto: writes lcd_text_flag; 6 instr
+func	0xcdc6	mod_set_lcd_text_flag_cdc6	Auto: writes lcd_text_flag; 6 instr
+func	0xcdd2	mod_c18_prologue_cdd2	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xcde4	mod_get_lcd_text_flag_cde4	Auto: reads lcd_text_flag; 4 instr
+func	0xcdec	mod_to_mod_get_TBLPTRH_cdec	Auto: Small wrapper around mod_get_TBLPTRH; 3 instr
+func	0xcdf4	mod_get_TBLPTRL_cdf4	Auto: reads TBLPTRL,TBLPTRH; 8 instr
+func	0xce04	mod_set_lcd_text_flag_ce04	Auto: writes lcd_text_flag; reads lcd_text_flag; 6 instr
+func	0xce12	mod_set_lcd_text_flag_ce12	Auto: writes lcd_text_flag,lcd_text_width; reads lcd_text_width; 6 instr
+func	0xce1e	mod_to_lcd_write_data_ce1e	Auto: Small wrapper around lcd_write_data; 3 instr
+func	0xcf6e	mod_set_lcd_delay_counter_cf6e	Auto: writes lcd_delay_counter; reads lcd_delay_counter; 14 instr
+func	0xcfc6	mod_to_mod_to_lcd_write_cmd_cfc6	Auto: Small wrapper around mod_to_lcd_write_cmd; 8 instr
+func	0xcfd8	mod_to_mod_to_lcd_write_cmd_cfd8	Auto: Small wrapper around mod_to_lcd_write_cmd; 11 instr
+func	0xd11e	mod_c18_prologue_d11e	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xd130	mod_c18_epilogue_d130	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xd13c	mod_stack_adjust_d13c	Auto: Software stack push/pop helper; 4 instr
+func	0xd144	mod_set_lcd_page_counter_d144	Auto: writes lcd_page_counter; 8 instr
+func	0xd154	mod_stack_adjust_d154	Auto: Software stack push/pop helper; 4 instr
+func	0xd15c	mod_to_lcd_write_cmd_d15c	Auto: calls lcd_write_cmd; 4 instr
+func	0xd164	mod_to_mod_set_lcd_delay_counter_d164	Auto: Small wrapper around mod_set_lcd_delay_counter; 3 instr
+func	0xd16c	mod_frame_access_d16c	Auto: Access stack-frame local/argument; 4 instr
+func	0xd47c	mod_to_cooling_reset_pulldown_d47c	Auto: calls cooling_reset_pulldown; 1 instr
+func	0xd49a	mod_push_args_68_00_d49a	Auto: Push constant arguments [104, 0]; 5 instr
+func	0xd6a0	mod_get_TBLPTRL_d6a0	Auto: reads TBLPTRL,TBLPTRH; 8 instr
+func	0xd6b4	mod_c18_prologue_d6b4	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xd6c6	mod_c18_epilogue_d6c6	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xd6d2	mod_get_TBLPTRL_d6d2	Auto: reads TBLPTRL,TBLPTRH,c18_tmp0,c18_tmp1; 11 instr
+func	0xd6f0	mod_frame_access_d6f0	Auto: Access stack-frame local/argument; 7 instr
+func	0xd700	mod_push_args_32_00_01_d700	Auto: Push constant arguments [50, 0, 1]; 8 instr
+func	0xd710	mod_stack_adjust_d710	Auto: Software stack push/pop helper; 10 instr
+func	0xd724	mod_to_eeprom_read_byte_d724	Auto: calls eeprom_read_byte; 6 instr
+func	0xd732	mod_get_c18_tmp0_d732	Auto: reads c18_tmp0,TABLAT; 6 instr
+func	0xd740	mod_to_eeprom_write_byte_b_d740	Auto: calls eeprom_write_byte_b; 7 instr
+func	0xd750	mod_to_eeprom_write_byte_d750	Auto: calls eeprom_write_byte; 6 instr
+func	0xd75e	mod_shift_multibyte_d75e	Auto: compiler fragment: MOVWF FSR1L,ACCESS ; MOVF 0x0016,w,ACCESS ; MOVLB #0x2 ; MOVWF 0x1,BANKED ; RLCF 0x0016,w,ACCESS ; RETURN 0x0
+func	0xd76a	mod_frag_d76a	Auto: compiler fragment: MOVWF FSR1L,ACCESS ; MOVF 0x0014,w,ACCESS ; MOVLB #0x2 ; MOVWF 0x1,BANKED ; MOVF 0x0032,w,ACCESS ; RETURN 0x0
+func	0xd776	mod_chain_fnd78c_mod_get_c18_tmp0_d776	Auto: Calls 0xd78c, mod_get_c18_tmp0; 2 instr
+func	0xd77c	mod_chain_fnd6b4_fnd6f0_d77c	Auto: Calls 0xd6b4, 0xd6f0; 2 instr
+func	0xd782	mod_frame_access_d782	Auto: Access stack-frame local/argument; 5 instr
+func	0xd78c	mod_to_mod_get_TBLPTRL_d78c	Auto: Small wrapper around mod_get_TBLPTRL; 3 instr
+func	0xe290	mod_to_mod_get_c18_tmp0_e290	Auto: Small wrapper around mod_get_c18_tmp0; 21 instr
+func	0xe2ba	mod_to_ui_draw_progress_segment_e2ba	Auto: writes popup_flag; reads popup_index,popup_arg; calls ui_draw_progress_segment; 9 instr
+func	0xe2d0	mod_get_popup_index_e2d0	Auto: reads popup_index; 22 instr
+func	0xe3ec	mod_to_mod_to___divs16_e3ec	Auto: Small wrapper around mod_to___divs16; 7 instr
+func	0xe3fc	mod_c18_prologue_e3fc	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xe40e	mod_c18_epilogue_e40e	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xe41a	mod_get_popup_icon_e41a	Auto: reads popup_icon; 11 instr
+func	0xe436	mod_get_c18_tmp0_e436	Auto: reads c18_tmp0,c18_tmp1; 3 instr
+func	0xe440	mod_calc_array_ptr_e440	Auto: Compute array element address in FSR0; 7 instr
+func	0xe44e	mod_to_lcd_write_data_e44e	Auto: Small wrapper around lcd_write_data; 4 instr
+func	0xe458	mod_to___divs16_e458	Auto: reads c18_tmp0,c18_tmp1,math_aarg_lo,math_aarg_hi; calls __divs16; 14 instr
+func	0xe47e	mod_to_mod_get_c18_tmp0_e47e	Auto: Small wrapper around mod_get_c18_tmp0; 4 instr
+func	0xe488	mod_get_popup_arg_e488	Auto: reads popup_arg; 5 instr
+func	0xe496	mod_stack_adjust_e496	Auto: Software stack push/pop helper; 4 instr
+func	0xe838	mod_to_heater_load_maxon_e838	Auto: calls heater_load_maxon; 1 instr
+func	0xe880	mod_c18_prologue_e880	Auto: C18 function prologue: save FSR2 and set new frame pointer; 5 instr
+func	0xe8a2	mod_c18_epilogue_e8a2	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xea3a	mod_to_compressor_load_maxon_ea3a	Auto: calls compressor_load_maxon; 1 instr
+func	0xedc4	mod_c18_prologue_edc4	Auto: C18 function prologue: save FSR2 and set new frame pointer; 7 instr
+func	0xedda	mod_c18_epilogue_edda	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xedfc	mod_get_c18_tmp0_edfc	Auto: reads c18_tmp0,c18_tmp1; 3 instr
+func	0xf334	mod_get_TBLPTRH_f334	Auto: reads TBLPTRH,TBLPTRL,TABLAT; 24 instr
+func	0xf364	mod_get_TBLPTRH_f364	Auto: reads TBLPTRH,TBLPTRL,TABLAT; 24 instr
+func	0xf394	mod_c18_prologue_f394	Auto: C18 function prologue: save FSR2 and set new frame pointer; 6 instr
+func	0xf3a8	mod_c18_epilogue_f3a8	Auto: C18 function epilogue: restore FSR2 frame pointer and return; 4 instr
+func	0xf3b4	mod_stack_adjust_f3b4	Auto: Software stack push/pop helper; 7 instr
+func	0xf3c4	mod_callw_lcd_write_data_f3c4	Auto: Push W as argument and call lcd_write_data; 4 instr
+func	0xf41a	mod_frag_f41a	Auto: compiler fragment: CLRF 0x0000,ACCESS ; CLRF WREG,ACCESS ; BTFSS 0x000e,#0x7,ACCESS ; GOTO 0x00f434
+func	0xf424	mod_frag_f424	Auto: compiler fragment: NEGF 0x000b,ACCESS ; COMF 0x000c,f,ACCESS ; COMF 0x000d,f,ACCESS ; COMF 0x000e,f,ACCESS ; ADDWFC 0x000c,f,ACCESS ; ADDWFC 0x000d,f,ACCESS ; ADDWFC 0x000e,f,ACCESS ; COMF 0x0000,f,ACCESS ; BTFSS 0x0009,#0x7,ACCESS ; GOTO 0x00f44a
+func	0xf43a	mod_to___divu32_f43a	Auto: calls __divu32; 11 instr
+func	0xf454	mod_frag_f454	Auto: compiler fragment: BTFSS 0x0000,#0x7,ACCESS ; RETLW #0x0
+func	0xf458	mod_frag_f458	Auto: compiler fragment: NEGF 0x0006,ACCESS ; COMF 0x0007,f,ACCESS ; COMF 0x0008,f,ACCESS ; COMF 0x0009,f,ACCESS ; CLRF WREG,ACCESS ; ADDWFC 0x0007,f,ACCESS ; ADDWFC 0x0008,f,ACCESS ; ADDWFC 0x0009,f,ACCESS ; NEGF 0x0002,ACCESS ; COMF 0x0003,f,ACCESS ; CO
+func	0xf478	mod_frag_f478	Auto: compiler fragment: BTFSC 0x0000,#0x7,ACCESS ; GOTO 0x00f458
+func	0xf47e	mod_frag_f47e	Auto: compiler fragment: BSF 0x0001,#0x4,ACCESS ; RETLW #0xff
+func	0xf4c6	mod_compare_multibyte_f4c6	Auto: compiler fragment: MOVF 0x0012,w,ACCESS ; SUBWF 0x0008,f,ACCESS ; MOVF 0x0013,w,ACCESS ; SUBWFB 0x0009,f,ACCESS ; BTFSS 0x0013,#0x7,ACCESS ; RETLW #0x0 ; MOVF 0x000d,w,ACCESS ; SUBWF 0x0008,f,ACCESS ; MOVF 0x000e,w,ACCESS ; SUBWFB 0x0009,f,ACCESS ; 
+func	0xf55e	mod_frag_f55e	Auto: compiler fragment: MOVLW #0xfe ; MOVFF PLUSW1,FSR0L ; MOVLW #0xff ; MOVFF PLUSW1,FSR0H ; MOVFF FSR0L,PRODL ; MOVFF FSR0H,PRODH ; MOVLW #0xfb ; MOVF PLUSW1,w,ACCESS ; BNZ 0x00f57e ; MOVLW #0xfc ; MOVF PLUSW1,w,ACCESS ; BZ 0x00f590 ; MOVLW #0xfb ; DEC
+func	0xf5c4	mod_frag_f5c4	Auto: compiler fragment: MOVLW #0xfe ; MOVFF PLUSW1,FSR0L ; MOVLW #0xff ; MOVFF PLUSW1,FSR0H ; CLRF PRODL,ACCESS ; CLRF PRODH,ACCESS ; MOVF POSTINC0,f,ACCESS ; BZ 0x00f5de ; INFSNZ PRODL,f,ACCESS ; INCF PRODH,f,ACCESS ; BRA 0x00f5d4 ; RETURN 0x0
+func	0xf63c	mod_frag_f63c	Auto: compiler fragment: NOP ; NOP ; RETLW #0xfc
+func	0xf642	mod_return_0x0c_f642	Auto: Return constant 0x0c; 1 instr
+func	0xfbe8	mod_frag_fbe8	Auto: compiler fragment: MOVLW #0x0 ; MOVWF PRODL,ACCESS ; LFSR FSR0,#0x0 ; MOVLW #0xf ; RCALL 0x00fbf6 ; RETURN 0x0
+func	0xfbf6	mod_frag_fbf6	Auto: compiler fragment: CPFSLT FSR0H,ACCESS ; BRA 0x00fbfe ; CLRF POSTINC0,ACCESS ; BRA 0x00fbf6 ; MOVF PRODL,w,ACCESS ; CPFSLT FSR0L,ACCESS ; RETURN 0x0 ; CLRF POSTINC0,ACCESS ; BRA 0x00fc00
+func	0xfc22	mod_return_void_fc22	Auto: Empty function (return); 1 instr
+func	0xfc24	mod_shift_multibyte_fc24	Auto: compiler fragment: CLRF 0x0005,ACCESS ; MOVLW #0x8 ; MOVWF INDF1,ACCESS ; BCF STATUS,#0x0,ACCESS ; RLCF 0x0009,f,ACCESS ; RLCF 0x0005,f,ACCESS ; MOVF 0x000e,w,ACCESS ; SUBWF 0x0005,w,ACCESS ; BNC 0x00fc3a ; MOVWF 0x0005,ACCESS ; INCF 0x0009,f,ACCESS
+func	0xfc70	mod_jump_fnfc76_fc70	Auto: Jump to 0xfc76; 1 instr
+func	0xfc72	mod_jump_fnfc76_fc72	Auto: Jump to 0xfc76; 1 instr
+func	0xfc74	mod_jump_fnfc76_fc74	Auto: Jump to 0xfc76; 1 instr
+func	0xfc76	mod_set_r1fd_0_fc76	Auto: Set 0x1fd = 0; 4 instr
+func	0xfc7e	mod_jump_fnfc84_fc7e	Auto: Jump to 0xfc84; 1 instr
+func	0xfc80	mod_jump_fnfc84_fc80	Auto: Jump to 0xfc84; 1 instr
+func	0xfc82	mod_jump_fnfc84_fc82	Auto: Jump to 0xfc84; 1 instr
+func	0xfc84	mod_set_r203_0_fc84	Auto: Set 0x203 = 0; 4 instr
+func	0xfc8c	mod_set_r1fe_0_fc8c	Auto: Set 0x1fe = 0; 4 instr
+func	0xfc94	mod_return_0x01_fc94	Auto: Return constant 0x01; 1 instr
+func	0xfc96	mod_return_0x00_fc96	Auto: Return constant 0x00; 1 instr
+func	0xfc98	mod_set_r0ff_0_fc98	Auto: Set 0xff = 0; 4 instr
+func	0xfca0	mod_return_0x01_fca0	Auto: Return constant 0x01; 1 instr
+func	0xfca2	mod_set_r202_0_fca2	Auto: Set 0x202 = 0; 4 instr
+func	0xfcaa	mod_return_0x01_fcaa	Auto: Return constant 0x01; 1 instr
+func	0xfcac	mod_set_r200_0_fcac	Auto: Set 0x200 = 0; 4 instr
+# ---- remaining RAM ----
+var	0x039	serial_counter_ptr_lo	Serial: pointer to counter being reported (low byte)
+var	0x03a	serial_counter_ptr_hi	Serial: pointer to counter being reported (high byte)
+var	0x145	ui_layout_3	Screen layout constant
+var	0x147	ui_layout_5	Screen layout constant (status icon position)
+var	0x149	ui_layout_7	Screen layout constant (status icon position)
+var	0x14b	ui_layout_9	Screen layout constant
+var	0x150	progress_bar_aux	Progress bar auxiliary value
+var	0x154	anim_tmp	Animation scratch
+var	0x19e	menu_tmp_a_hi	Menu scratch (high byte)
+var	0x1a1	menu_day_edit_hi	Day edit (high byte, always 0)
+var	0x1a4	serial_buf_a4	Serial counter-set scratch buffer (0x1A4..0x1AB)
+var	0x1aa	serial_buf_aa	Serial counter-set scratch buffer
+var	0x0ff	unused_0ff	Cleared at startup only (no other reference found)
+var	0x1fd	unused_1fd	Cleared at startup only (no other reference found)
+var	0x1fe	unused_1fe	Cleared at startup only (no other reference found)
+var	0x200	unused_200	Cleared at startup only (no other reference found)
+var	0x202	unused_202	Cleared at startup only (no other reference found)
+var	0x203	unused_203	Cleared at startup only (no other reference found)
+var	0xd00	c18_software_stack	C18 software stack (FSR1 stack pointer / FSR2 frame pointer start at 0xD00)
+# ---- program-memory data tables ----
+rom	0x002a	c18_init_table	C18 RAM-initialisation table: count + 9 x {src, dst, size}
+rom	0x50c5	str_debug_messages	Serial debug strings ("HW valve - ON", ...)
+rom	0x529a	str_command_names	Serial command name strings
+rom	0x5301	str_component_names	Component names ("COLD SENSORS ", ...)
+rom	0x7b58	font_main	LCD font / icon bitmaps
+rom	0x9010	font_big_digits	Large digit bitmaps (51 bytes each)
+rom	0xdd5b	param_table	Parameter table: 75 x {name ptr, default, min, max, unit, id}; entry 0 = FT (first-time flag, EEPROM 0)
+rom	0xdf67	counter_desc_table	Usage-counter descriptors: 18 x {name ptr, size, RAM addr, flag}
+rom	0xe49e	menu_main	Menu record: MAIN MENU (records are 0x26 bytes)
+rom	0xe582	menu_installation	Menu record: INSTALLATION (hidden)
+rom	0xe61a	menu_service	Menu record: SERVICE (hidden)
+rom	0xea96	ntc_table_cold	NTC conversion table, cold sensors
+rom	0xeb4a	ntc_table_hot	NTC conversion table, hot sensors
+rom	0xebd6	ntc_table_device	NTC conversion table, device sensor (AN6)
+rom	0xee06	words_he	UI word table, Hebrew
+rom	0xef20	dict_he	Dictionary words, Hebrew
+rom	0xef8e	words_ru	UI word table, Russian
+rom	0xf0a8	dict_ru	Dictionary words, Russian
+rom	0xf114	words_en	UI word table, English (178 entries)
+rom	0xf22e	dict_en	Dictionary words, English (referenced as 0x01 k in strings)
+rom	0xfa8e	component_fault_table	Component name -> fault variable table
+rom	0xfab0	command_table	Serial command table: 28 x {hash, name ptr} (PD first)
+rom	0xfc5c	heater_burst_patterns	Heater power-level bit patterns (10 x 16 bits)
+rom	0xfcbe	init_values	Initial values copied to RAM by _do_cinit

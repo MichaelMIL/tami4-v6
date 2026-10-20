@@ -1,0 +1,105 @@
+Complete program-memory classification (every byte 0x0000-0xFFFF)
+
+0x002A-0x0097    110  C18 RAM-initialisation table (9 records)
+0x0098-0x50BF  20520  code
+0x50C0-0x52FF    576  Debug strings (serial console replies)
+0x5300-0x5361     98  Component name strings
+0x5362-0x5853   1266  Parameter / counter name strings
+0x5854-0x587E     43  UI strings: dictionary words and messages, English / Russian / Hebrew
+0x5896-0x5923    142  UI strings: dictionary words and messages, English / Russian / Hebrew
+0x5930-0x6D69   5178  UI strings: dictionary words and messages, English / Russian / Hebrew
+0x6D6A-0x7ADF   3446  code
+0x7B0A-0x7B26     29  Small icon bitmaps
+0x7B28-0x7B3C     21  Small icon bitmaps
+0x7B3F-0x7B55     23  Small icon bitmaps
+0x7B58-0x7F14    957  LCD fonts and icon bitmaps
+0x7F3B-0x7FEE    180  LCD fonts and icon bitmaps
+0x7FF5-0x8004     16  LCD fonts and icon bitmaps
+0x801F-0x8042     36  LCD fonts and icon bitmaps
+0x8044-0x8060     29  LCD fonts and icon bitmaps
+0x8063-0x8083     33  LCD fonts and icon bitmaps
+0x8086-0x835F    730  LCD fonts and icon bitmaps
+0x8361-0x87ED   1165  LCD fonts and icon bitmaps
+0x880A-0x8825     28  LCD fonts and icon bitmaps
+0x8842-0x885D     28  LCD fonts and icon bitmaps
+0x887A-0x8895     28  LCD fonts and icon bitmaps
+0x88B2-0x88CD     28  LCD fonts and icon bitmaps
+0x88EA-0x8B9D    692  LCD fonts and icon bitmaps
+0x8B9E-0x8BAF     18  erased (0xFF)
+0x8BB0-0x8BF4     69  LCD fonts and icon bitmaps
+0x8C18-0x8C44     45  LCD fonts and icon bitmaps
+0x8C68-0x8C94     45  LCD fonts and icon bitmaps
+0x8CB8-0x8CE4     45  LCD fonts and icon bitmaps
+0x8D08-0x8D34     45  LCD fonts and icon bitmaps
+0x8D58-0x8D84     45  LCD fonts and icon bitmaps
+0x8DCE-0x8DEC     31  LCD fonts and icon bitmaps
+0x8E36-0x8E54     31  LCD fonts and icon bitmaps
+0x8E9E-0x8EBC     31  LCD fonts and icon bitmaps
+0x8F06-0x8F24     31  LCD fonts and icon bitmaps
+0x8F6E-0x8FA1     52  LCD fonts and icon bitmaps
+0x8FA3-0x8FD8     54  LCD fonts and icon bitmaps
+0x8FDB-0x900F     53  LCD fonts and icon bitmaps
+0x9010-0x9219    522  Large digit bitmaps (51 bytes each)
+0x921C-0x9281    102  Large digit bitmaps (51 bytes each)
+0x9282-0xDD59  19160  code
+0xDD5A-0xDE37    222  Parameter table (75 x 7 bytes: name, default, min, max, unit, id)
+0xDE39-0xDE61     41  Parameter table (75 x 7 bytes: name, default, min, max, unit, id)
+0xDE63-0xDE8B     41  Parameter table (75 x 7 bytes: name, default, min, max, unit, id)
+0xDE94-0xDEF4     97  Parameter table (75 x 7 bytes: name, default, min, max, unit, id)
+0xDEF6-0xDF25     48  Parameter table (75 x 7 bytes: name, default, min, max, unit, id)
+0xDF27-0xDF41     27  Parameter table (75 x 7 bytes: name, default, min, max, unit, id)
+0xDF4A-0xDF66     29  Parameter table (75 x 7 bytes: name, default, min, max, unit, id)
+0xDFD6-0xE49D   1224  code
+0xE49E-0xE5CF    306  Menu definition records (0x26 bytes each)
+0xE5D1-0xE6B9    233  Menu definition records (0x26 bytes each)
+0xE6BA-0xEA95    988  code
+0xEAAA-0xEB49    160  NTC table: cold sensors
+0xEB4F-0xEBD5    135  NTC table: hot sensors
+0xEBDB-0xEC75    155  NTC table: device/AN6 sensor
+0xEC76-0xEE05    400  code
+0xEE06-0xEF1F    282  Word table group A, Hebrew
+0xEF20-0xEF8D    110  Dictionary table group B, Hebrew
+0xEF8E-0xF0A7    282  Word table group A, Russian
+0xF0A8-0xF113    108  Dictionary table group B, Russian
+0xF114-0xF22D    282  Word table group A, English
+0xF23B-0xF277     61  Dictionary table group B, English
+0xF278-0xF643    972  code
+0xF644-0xF75F    284  Bitmap data
+0xF760-0xFA8D    814  code
+0xFA8E-0xFAB1     36  Component -> fault variable table (8 x 4 bytes)
+0xFAB2-0xFB03     82  Data table
+0xFB04-0xFC5B    344  code
+0xFC5C-0xFC6D     18  Heater burst-fire patterns (10 x 16 bits)
+0xFC70-0xFCB3     68  code
+0xFCC0-0xFCFE     63  RAM initial values (sources for C18 init table)
+0xFCFF-0xFFFF    769  erased (0xFF)
+
+Totals:
+   47950  code
+    5391  UI strings: dictionary words and messages, English / Russian / Hebrew
+    5035  LCD fonts and icon bitmaps
+    1266  Parameter / counter name strings
+    1122  erased (0xFF)
+     624  Large digit bitmaps (51 bytes each)
+     576  Debug strings (serial console replies)
+     539  Menu definition records (0x26 bytes each)
+     517  Parameter table (75 x 7 bytes: name, default, min, max, unit, id)
+     284  Bitmap data
+     282  Word table group A, Hebrew
+     282  Word table group A, Russian
+     282  Word table group A, English
+     176  NTC table: cold sensors
+     158  NTC table: device/AN6 sensor
+     138  NTC table: hot sensors
+     110  C18 RAM-initialisation table (9 records)
+     110  Dictionary table group B, Hebrew
+     108  Small icon bitmaps
+     108  Dictionary table group B, Russian
+      98  Component name strings
+      93  Usage-counter descriptor table (18 x 6 bytes)
+      82  Data table
+      73  Dictionary table group B, English
+      72  RAM initial values (sources for C18 init table)
+      36  Component -> fault variable table (8 x 4 bytes)
+      18  Heater burst-fire patterns (10 x 16 bits)
+       6  vector padding (unreached RETURN)

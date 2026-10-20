@@ -1,0 +1,25 @@
+# ESP build artifacts (large, regenerable)
+esp32_bridge/.pio/
+
+# Secrets: WiFi / web UI / OTA passwords (never commit)
+secrets.ini
+secrets*.ini
+esp32_bridge/secrets.ini
+
+# PlatformIO/VSCode auto-generated IntelliSense config (expands the secret build flags)
+.vscode/
+esp32_bridge/.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ghidra locks / per-user state
+*.lock
+*.ulock
+*.rep/.ghidraUserData/
+
+# macOS
+.DS_Store
+._*

@@ -1,0 +1,78 @@
+[e49e] type=0 "MAIN MENU" n=5 b3=0 parent=0000 tail=0000
+     0: "TIME & DATE" sub=e4c4 action=0000
+     1: "WATER TEMP & QTY" sub=e55c action=0000
+     2: "SETTINGS" sub=e5a8 action=0000
+     3: "REPLACEMENT" sub=0000 action=0db8
+     4: "ENTER POWER DOWN" sub=0000 action=00b2
+[e4c4] type=0 "TIME & DATE" n=4 b3=0 parent=e49e tail=0000
+     0: "CLOCK" sub=e4ea action=0000
+     1: "WAKE UP" sub=e510 action=0000
+     2: "ENERGY SAVING MODE" sub=0000 action=04f6
+     3: "POWER DOWN MODE" sub=0000 action=05d0
+[e4ea] type=2 "CLOCK" n=2 b3=0 parent=e4c4 tail=0819
+     0: "SUN" sub=0000 action=0814
+     1: "SUN" sub=0000 action=066c
+[e510] type=1 "WAKE UP" n=2 b3=1 parent=e4c4 tail=001a
+     0: "SUN" sub=0000 action=08c4
+     1: "SUN" sub=0000 action=0944
+[e536] type=0 "SUN" n=0 b3=0 parent=0000 tail=0000
+[e55c] type=0 "WATER TEMP & QTY" n=5 b3=1 parent=e49e tail=0000
+     0: "HOT WATER QTY." sub=0000 action=0d58
+     1: "MIX WATER TEMP." sub=0000 action=0b2c
+     2: "MIX WATER QTY." sub=0000 action=0d22
+     3: "COLD WATER TEMP." sub=0000 action=0a90
+     4: "COLD WATER QTY." sub=0000 action=0ccc
+[e582] type=3 "INSTALLATION" n=2 b3=0 parent=e582 tail=541a
+     0: "BOILING TEMP." sub=0000 action=0c32
+     1: "FILL TANKS" sub=0000 action=1538
+[e5a8] type=0 "SETTINGS" n=6 b3=2 parent=e49e tail=0000
+     0: "CHILD LOCK" sub=0000 action=011e
+     1: "DISPLAY SET" sub=e5f4 action=0000
+     2: "BEEP ON KEY" sub=0000 action=00ca
+     3: "LANGUAGE" sub=e5ce action=037c
+     4: "RESTORE FACTORY SET" sub=0000 action=0318
+     5: "RESET" sub=0000 action=0360
+[e5ce] type=0 "LANGUAGE" n=255 b3=3 parent=e5a8 tail=0000
+     0: "ENGLISH" sub=0000 action=0000
+     1: "P\xb8CCK\xb4\xb5" sub=0000 action=0000
+     2: "\xfa\xe9\xf8\xe1\xf2" sub=0000 action=0000
+     3: "SUN" sub=0000 action=0000
+     4: "SUN" sub=0000 action=0000
+     5: "SUN" sub=0000 action=0000
+[e5f4] type=0 "DISPLAY SET" n=3 b3=1 parent=e5a8 tail=0000
+     0: "SPOUT LIGHT" sub=0000 action=0148
+     1: "CLOCK VIEW" sub=0000 action=0178
+     2: "UNITS" sub=0000 action=01a8
+[e61a] type=0 "SERVICE" n=2 b3=0 parent=0000 tail=0000
+     0: "BOILING TEMP." sub=0000 action=0c62
+     1: "SETTINGS" sub=e640 action=0000
+[e640] type=0 "SETTINGS" n=3 b3=1 parent=e61a tail=0000
+     0: "TEMP. SENSOR" sub=0000 action=13e8
+     1: "CONFIGURATION" sub=e666 action=0000
+     2: "UV" sub=0000 action=207e
+[e666] type=0 "CONFIGURATION" n=3 b3=1 parent=e640 tail=0000
+     0: "MENU" sub=0000 action=1ff2
+     1: "APPLICATION" sub=e68c action=2020
+     2: "BACK LIGHT" sub=0000 action=20b0
+[e68c] type=0 "APPLICATION" n=4 b3=1 parent=e666 tail=0000
+     0: "COLD ONLY" sub=0000 action=0000
+     1: "HOT ONLY" sub=0000 action=0000
+     2: "COLD/HOT" sub=0000 action=0000
+     3: "COLD/ROOM" sub=0000 action=0000
+
+HOW TO OPEN THE HIDDEN MENUS (from ui_update 0x33C8 and ui_init 0x42F6)
+Key codes: 0x20 = the key that opens MAIN MENU from the home screen (MENU/OK); 0x40 = the key that backs out of menus (BACK).
+
+SERVICE (0xE61A)
+  On the running unit, hold keys 0x20 + 0x40 together. Counter ui_menu_param (0x109) counts 5 UI cycles
+  (about 1-2 s), then SERVICE opens with a 60 s inactivity timeout.
+
+INSTALLATION (0xE582): first-installation flow after SHIPPING MODE (SYSTEMCONFIG4 bit 0)
+  1. Activate shipping mode: hold key 0x20 while powering on. The flag is saved in EEPROM, the LCD shows
+     "SHIPPING MODE ACTIVATED", it beeps 3 times and then halts (power off).
+  2. Next power-up with the flag set: heater, compressor and both thermostat tasks are stopped, the language
+     list is shown, then the INSTALLATION menu (BOILING TEMP., FILL TANKS with flushing).
+  3. Finishing installation ("INSTALLATION COMPLETED", 0x17A4) clears the flag and saves it.
+  Skip / cancel: power on with the flag set while holding key 0x40, which shows "SHIPPING MODE CANCELLED" and clears the flag.
+  Factory jumper (RB5 low at power-up) clears the flag in RAM only ("PRODUCTION MODE CANCELLED").
+  NOTE: this unit's EEPROM has SYSTEMCONFIG4 = 0xE7, so bit 0 is SET. It should start in the installation flow at power-up.

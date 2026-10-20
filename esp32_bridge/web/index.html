@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PIC Service Console</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--mut:#6b7280;--line:#e3e6eb;--acc:#1565c0;--bad:#b00020;--ok:#2e7d32;--chg:#fff6c2;--drift:#ffd9b0;--sel:#dbe8fb;--new:#d7f5d0}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1b2029;--fg:#e6e9ef;--mut:#9aa3b2;--line:#2c3340;--acc:#64a8ff;--bad:#ff6b81;--ok:#6fcf7a;--chg:#4a4420;--drift:#55361a;--sel:#203453;--new:#1f4423}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header h1{font-size:16px;margin:0 auto 0 0}
+#conn{color:var(--mut);font-size:12px}
+nav{display:flex;gap:2px;overflow-x:auto;padding:0 16px;background:var(--card);border-bottom:1px solid var(--line)}
+nav button{border:0;background:none;color:var(--mut);padding:10px 12px;border-bottom:2px solid transparent;border-radius:0;white-space:nowrap}
+nav button.on{color:var(--acc);border-bottom-color:var(--acc)}
+main{padding:16px;max-width:1100px;margin:0 auto}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+.card h2{font-size:14px;margin:0 0 8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+button{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.danger{color:var(--bad)}
+button.stop{background:#c62828;border-color:#c62828;color:#fff;font-weight:700}
+input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);min-width:0}
+input[type=checkbox]{min-width:auto}
+label{display:flex;gap:6px;align-items:center}
+.mut{color:var(--mut);font-size:12px}
+.bad{color:var(--bad)}.ok{color:var(--ok)}
+.tw{overflow:auto;max-height:60vh;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:4px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{position:sticky;top:0;background:var(--card);font-weight:600}
+td.l,th.l{text-align:left}
+tr.chg td{background:var(--chg)}tr.new td{background:var(--new)}tr.drift td{background:var(--drift)}tr.sel td{background:var(--sel)}
+tbody tr{cursor:pointer}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}dt{color:var(--mut)}dd{margin:0;font-weight:600}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;max-height:60vh;margin:0;font:12px/1.4 ui-monospace,Menlo,monospace}
+.tx{color:var(--acc);font-weight:700}
+#toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;display:none;max-width:90vw;z-index:9}
+.mono{font-family:ui-monospace,Menlo,monospace}
+progress{width:100%}
+.desc{white-space:pre-wrap;font-size:13px;line-height:1.5;color:var(--fg)}
+.desc b{font-size:14px}
+td.wrap{white-space:normal;min-width:260px;max-width:520px;text-align:left}
+.bits{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>PIC18F8621 Service Console</h1>
+  <span id="conn">…</span>
+  <span id="picfw" class="mut"></span>
+  <button class="stop" id="stopbtn" onclick="stop()">STOP</button>
+</header>
+<nav id="tabs"></nav>
+<main>
+
+<section id="t-status">
+  <div class="row"><button onclick="refreshStatus()">Refresh all</button>
+    <label><input type="checkbox" id="auto" onchange="autoToggle()"> Auto every</label>
+    <input id="autoSec" type="number" value="15" min="5" style="width:70px"> s</div>
+  <div class="grid2">
+    <div class="card"><h2>Readings</h2><dl id="readings"></dl></div>
+    <div class="card"><h2>Component faults (ST)</h2>
+      <table><thead><tr><th class="l">Component</th><th>Raw</th><th class="l">Meaning</th></tr></thead><tbody id="st"></tbody></table>
+      <p class="mut">With no NTC sensors / UV lamp attached on the bench, 0x8D and 0x8B are expected.</p></div>
+  </div>
+</section>
+
+<section id="t-params">
+  <div class="row"><button onclick="readParams()">Read all (GPL)</button>
+    <button onclick="csv(params,'params')">Export CSV</button>
+    <button onclick="restoreParams()">Restore from baseline…</button>
+    <button onclick="saveBaseline('gpl')">Save current as baseline</button>
+    <button class="danger" onclick="guard('RPL','Restores all 75 parameters to ROM defaults.').then(readParams)">Reset ALL to defaults (RPL)</button></div>
+  <p class="mut">Yellow: differs from ROM default · orange: differs from baseline · values unsigned (GPL prints signed bytes) · * = untested on the unit</p>
+  <div class="card" id="pedit"><div class="row"><b id="psel">Select a row</b></div>
+    <div class="row">
+      <label>Value <input id="pv" type="number" min="0" max="255" style="width:80px"></label><button onclick="setParam('value','SP')">Set (SP)</button>
+      <label>Min <input id="pmin" type="number" min="0" max="255" style="width:80px"></label><button onclick="setParam('min','SMN')">Set (SMN) *</button>
+      <label>Max <input id="pmax" type="number" min="0" max="255" style="width:80px"></label><button onclick="setParam('max','SMX')">Set (SMX) *</button>
+      <button onclick="getParam()">Read (GP)</button><button onclick="resetParam()">Restore default (RP)</button>
+    </div>
+    <div id="pdesc" class="desc mut">Select a parameter to see what it does.</div></div>
+  <div class="row"><input id="pfilter" placeholder="Filter by name, group or text…" style="flex:1" oninput="fillParams()">
+    <select id="pgroup" onchange="fillParams()"><option value="">All groups</option></select></div>
+  <div class="tw"><table><thead><tr><th>#</th><th class="l">Name</th><th class="l">Group</th><th>Value</th><th class="l">Meaning</th><th>Min</th><th>Max</th><th>Default</th><th>Baseline</th></tr></thead><tbody id="ptab"></tbody></table></div>
+</section>
+
+<section id="t-counters">
+  <div class="row"><button onclick="readCounters()">Read all (GCL)</button>
+    <button onclick="csv(counters,'counters')">Export CSV</button>
+    <button onclick="restoreCounters()">Restore from baseline… *</button>
+    <button onclick="saveBaseline('gcl')">Save current as baseline</button>
+    <button class="danger" onclick="guard('RCL','Clears all 16 counters and both byte statistics.').then(readCounters)">Clear ALL (RCL)</button></div>
+  <div class="card"><div class="row"><b id="csel">Select a row</b>
+    <button onclick="getCounter()">Read (GC)</button><button onclick="clearCounter()">Clear (RC) *</button>
+    <label>Value <input id="cv" type="number" min="0" style="width:130px"></label><button onclick="setCounter()">Set (gNN) *</button></div>
+    <div id="cdesc" class="desc mut">Select a counter to see what it counts.</div></div>
+  <div class="tw"><table><thead><tr><th>#</th><th class="l">Name</th><th>Value</th><th>Baseline</th><th class="l">Meaning</th></tr></thead><tbody id="ctab"></tbody></table></div>
+</section>
+
+<section id="t-controls">
+  <p class="mut">These switch outputs or change the operating mode. Each asks for confirmation and must be enabled under Settings. STP is always allowed.</p>
+  <div id="ctl"></div>
+  <div class="card"><h2>Execute command-table entry (XC n) *</h2><div class="row">
+    <input id="xcn" type="number" min="0" max="27" value="4" style="width:70px">
+    <button onclick="guard('XC '+$('#xcn').value,'Runs whatever command sits at that index of the LCL table.')">Send XC</button>
+    <button onclick="send('LCL').then(r=>toast(r.lines.slice(1).join('  ')))">Show table (LCL)</button></div></div>
+</section>
+
+<section id="t-status35">
+  <div class="row"><button onclick="refreshStatus()">Refresh all</button>
+    <label><input type="checkbox" id="auto35" onchange="autoToggle(this)"> Auto every</label>
+    <input id="autoSec35" type="number" value="15" min="5" style="width:70px"> s</div>
+  <div class="grid2">
+    <div class="card"><h2>Readings</h2><dl id="readings35"></dl></div>
+    <div class="card"><h2>Outputs (from input)</h2><table><thead><tr><th>#</th><th class="l">Output</th><th class="l">State</th></tr></thead><tbody id="outs35"></tbody></table>
+      <p class="mut">With no NTC sensors / UV lamp on the bench, temperatures read -1 (A2D 1023) and errors 6, 21 are active. Error numbers are not decoded yet.</p></div>
+  </div>
+</section>
+
+<section id="t-controls35">
+  <p class="mut">These switch outputs or change the operating mode. Each asks for confirmation and must be enabled under Settings (none tested on the unit yet). STOP (valves off) is always allowed.</p>
+  <div class="grid2">
+    <div class="card"><h2>Outputs (output=n,v)</h2>
+      <table><thead><tr><th>#</th><th class="l">Output</th><th class="l">State</th><th></th></tr></thead><tbody id="outsCtl"></tbody></table>
+      <div class="row" style="margin-top:8px"><button onclick="send('output').then(showOutputs)">Read (output)</button></div>
+      <p class="mut">Writes the port latch directly; the normal control tasks may switch it back (inferred). Testing mode probably prevents that.</p></div>
+    <div>
+      <div class="card"><h2>Dispense (hot=a / cold=a / mix=a)</h2><div class="row">
+        <label>Argument <input id="darg" type="number" value="1" style="width:80px"></label>
+        <button onclick="dispense('hot')">Hot</button><button onclick="dispense('cold')">Cold</button><button onclick="dispense('mix')">Mix</button></div>
+        <p class="mut">The argument is required (stored at RAM 0x10A); whether it is a volume or a time is not decoded. There is no dispense-stop command in v3.5.13: STOP switches the hot, cold and inlet valves off with output=n,0. If water still flows, use reset.</p></div>
+      <div class="card"><h2>Simulate a key press (manual_press=k,t)</h2><div class="row">
+        <label>Key <input id="mkey" type="number" min="0" max="6" value="0" style="width:60px"></label>
+        <label>Time <input id="mtime" type="number" min="1" value="10" style="width:80px"></label>
+        <button onclick="manualPress()">Press</button></div>
+        <p class="mut">Key 0-6, time &gt; 0. Key numbers and the time unit are not decoded.</p></div>
+      <div class="card"><h2>Testing mode / other</h2><div class="row">
+        <button onclick="guard('testing_mode=1')">Enter testing mode</button><button onclick="guard('testing_mode=0')">Leave testing mode</button>
+        <button onclick="guard('ex')">ex (unknown)</button><button class="danger" onclick="guard('reset')">Reset controller</button></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="t-setup35">
+  <p class="mut">Production / service settings. These write EEPROM; shipping and production mode also reset the controller. None tested on the unit yet.</p>
+  <div class="card"><h2>Idle-screen text (settext)</h2>
+    <div class="row"><input id="logotext" maxlength="16" placeholder="Line 1 (A-Z, 0-9)" style="flex:1">
+      <input id="logotext2" maxlength="16" placeholder="Line 2 (optional)" style="flex:1"></div>
+    <div class="row"><button onclick="setLogoText()">Set</button><button onclick="clearLogoText()">Clear logo</button></div>
+    <p class="mut">Replaces the &ldquo;Strauss Water&rdquo; logo on the idle screen. <b>Two rows</b> — line 2 is optional, drawn below line 1 (shown uppercase). Needs a firmware with <b>settext</b> (the combined <span class="mono">PIC18F8621-3.5.13-par-settext.hex</span>, or the <span class="mono">logotext.hex</span>) and <b>Allow EEPROM writes</b> enabled (Settings). Empty text clears it.</p></div>
+  <div class="card"><h2>Language (set_language=n)</h2><div class="row"><select id="lang"></select>
+    <button onclick="guard('set_language=' + $('#lang').value, 'Writes the language field (bits 0x38) of SYSTEMCONFIG2.')">Set language</button></div></div>
+  <div class="card"><h2>Shipping mode (set_shipping_mode=n)</h2><div class="row">
+    <button onclick="guard('set_shipping_mode=1', SHIP)">ON (1)</button><button onclick="guard('set_shipping_mode=0', SHIP)">OFF (0)</button></div>
+    <p class="mut">SYSTEMCONFIG4 bit 0: the first-installation flow runs at the next power-up. The controller resets afterwards.</p></div>
+  <div class="card"><h2>Production mode (set_production_mode=n)</h2><div class="row">
+    <button onclick="guard('set_production_mode=1', PROD)">ON (1)</button><button onclick="guard('set_production_mode=0', PROD)">OFF (0)</button></div>
+    <p class="mut">SYSTEMCONFIG3 bit 0x02. While set, every boot forces the factory configuration in RAM (SYSTEMCONFIG |= 0xBF, SYSTEMCONFIG2 = 0x40 = English, SYSTEMCONFIG4 = 0xE7), as the factory jumper does. The controller resets afterwards.</p></div>
+  <div class="card"><h2>Other</h2><div class="row">
+    <button onclick="send('ls')">Show command table (ls)</button>
+    <button class="danger" onclick="guard('restore_factory_settings', 'v3.5.13 has no command to read the parameters back, so the current values cannot be saved first over serial.')">Restore factory settings</button>
+    <button class="danger" onclick="guard('reset')">Reset controller</button></div></div>
+</section>
+
+<section id="t-params35">
+  <div class="row"><button onclick="readParams35()">Read all (par)</button>
+    <button onclick="csv35()">Export CSV</button>
+    <input id="pf35" placeholder="Filter by name, group or text…" style="flex:1" oninput="fillParams35()"></div>
+  <div class="card"><div class="row"><b id="pesel">No parameter selected</b>
+      <label>Value <input id="pev" type="number" min="0" max="255" style="width:80px"></label><button onclick="setParam35()">Set (par=i,v)</button>
+      <button onclick="getParam35()">Read (par=i)</button><button onclick="resetParam35()">Restore default</button></div>
+    <div id="pedesc" class="desc mut">Select a parameter to see what it does.</div></div>
+  <p class="mut">Needs a firmware with <b>par</b> (the combined <span class="mono">par-settext.hex</span>, or <span class="mono">par-jug.hex</span>); a stock unit answers ERROR -123. <span class="mono">par=i</span> reads, <span class="mono">par=i,v</span> writes. This firmware does not range-check writes, so the browser blocks values outside min..max; enable "Allow EEPROM writes" in Settings.</p>
+  <div class="tw"><table><thead><tr><th>#</th><th class="l">Name</th><th class="l">Group</th><th>Value</th><th class="l">Meaning</th><th>Min</th><th>Max</th><th>Default</th></tr></thead><tbody id="petab"></tbody></table></div>
+</section>
+
+<section id="t-pref">
+  <p class="mut">ROM reference: defaults and limits with explanations. To read/write live values use the <b>Parameters</b> tab (needs the par patch). Green: new in v3.5.13 · yellow: changed from v3.47.</p>
+  <div class="card"><div id="rdesc" class="desc mut">Select a parameter to see what it does.</div></div>
+  <div class="tw"><table><thead><tr><th>#</th><th class="l">Name</th><th class="l">Group</th><th>Default</th><th class="l">Meaning</th><th>Min</th><th>Max</th><th class="l">v3.47 def/min/max</th></tr></thead><tbody id="rtab"></tbody></table></div>
+</section>
+
+<section id="t-console">
+  <div class="card"><div class="row">
+    <input id="cin" class="mono" maxlength="29" placeholder="e.g. GP 21" style="width:260px" autocomplete="off" autocapitalize="off">
+    <button onclick="consoleSend()">Send</button><span id="cinfo" class="mut"></span>
+    <button style="margin-left:auto" onclick="$('#cout').innerHTML=''">Clear</button></div>
+  <pre id="cout"></pre></div>
+</section>
+
+<section id="t-log">
+  <div class="row"><button onclick="loadLog()">Refresh</button>
+    <button onclick="dl('serial_bridge_log.txt',$('#log').textContent,'text/plain')">Download</button>
+    <button onclick="post('/api/log/clear').then(loadLog)">Clear</button>
+    <span class="mut">Last 16 KB of exchanges, kept in the ESP's RAM (lost on reboot).</span></div>
+  <pre id="log"></pre>
+</section>
+
+<section id="t-settings">
+  <div class="grid2">
+    <div class="card"><h2>Device</h2><dl id="info"></dl></div>
+    <div class="card"><h2>Home Wi-Fi</h2>
+      <div class="row"><input id="ssid" placeholder="SSID" list="ssids" style="flex:1"><datalist id="ssids"></datalist><button onclick="scan()">Scan</button></div>
+      <div class="row"><input id="wpass" type="password" placeholder="Password (blank = keep)" style="flex:1"></div>
+      <div class="row"><label><input type="checkbox" id="apAlways"> Keep own access point on</label></div>
+      <p class="mut">If home Wi-Fi is not reachable for 30 s, the access point <b id="apname"></b> starts (captive setup page at 192.168.4.1).</p></div>
+    <div class="card"><h2>PIC firmware</h2>
+      <div class="row"><select id="picMode"><option value="auto">Auto-detect</option><option value="3.47">v3.47 (9600, hashed commands)</option>
+        <option value="3.5.13">v3.5.13 (38400, text shell)</option></select><button onclick="setPicFw()">Apply / detect now</button></div>
+      <p class="mut">Auto probes VER at 9600 first, then ver at 38400 (the order that is harmless for both firmwares). Saved on the ESP and applied at every boot.</p></div>
+    <div class="card"><h2>Safety</h2>
+      <div class="row"><label><input type="checkbox" id="allowEeprom"> Allow EEPROM writes (v3.47 SP SMN SMX RP RPL RC RCL g · v3.5.13 restore_factory_settings set_* par=i,v)</label></div>
+      <div class="row"><label><input type="checkbox" id="allowHw"> Allow hardware actions (v3.47 DCW DHW CP* EH* NM SM PD RS XC, raw words · v3.5.13 output=n,v hot cold mix manual_press testing_mode reset ex)</label></div>
+      <p class="mut">Both are off by default. The ESP enforces them; STOP is always allowed (v3.47 STP, v3.5.13 output=4|5|6,0). Restore reference: Parameters/Counters → baseline.</p></div>
+    <div class="card"><h2>Access</h2>
+      <div class="row"><label>Hostname <input id="host" style="width:140px"></label><span class="mut">.local</span></div>
+      <div class="row"><label>Web user <input id="webUser" style="width:140px"></label></div>
+      <div class="row"><input id="webPass" type="password" placeholder="New web password"></div>
+      <div class="row"><input id="apPass" type="password" placeholder="New AP password (8+)"></div>
+      <div class="row"><input id="otaPass" type="password" placeholder="New OTA password"></div>
+      <div class="row"><label>TZ <input id="tz" class="mono" style="width:220px"></label></div>
+      <p class="mut">Blank password fields keep the current value. TZ is POSIX, e.g. <span class="mono">IST-2IDT,M3.4.4/26,M10.5.0</span>. Hostname, OTA and Wi-Fi changes apply after reboot.</p></div>
+  </div>
+  <div class="row"><button onclick="saveSettings()">Save settings</button><button class="danger" onclick="reboot()">Reboot ESP</button></div>
+</section>
+
+<section id="t-firmware">
+  <div class="card"><h2>Web OTA update</h2>
+    <p class="mut">Upload <span class="mono">.pio/build/s2mini/firmware.bin</span>. The ESP reboots when done. From PlatformIO: <span class="mono">pio run -e s2mini_ota -t upload</span>.</p>
+    <div class="row"><input type="file" id="fw" accept=".bin"><button onclick="upload()">Upload</button></div>
+    <progress id="fwp" value="0" max="100"></progress><div id="fws" class="mut"></div></div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let FW = '3.47';  // PIC firmware, from /api/info (the ESP detects it)
+const maxLen = () => FW === '3.5.13' ? 29 : 11;
+const READ = 'VER ST GHT GCT GDT COT GHS GCS HTS UVS IVS CVS HVS CWC GCH TC AC GP GC LCL GPL GCL'.split(' ');
+const EEP = 'SP RP SMN SMX RC g RPL RCL'.split(' ');
+const HW = 'DCW DHW STP CP0 CP1 EH1 EH0 NM SM PD RS XC'.split(' ');
+const UNTESTED = 'SMN SMX RC g RPL RCL XC'.split(' ');
+const BULK = ['RPL', 'RCL'];
+const FAULTS = {0x81:'unknown command',0x82:'rejected / UV lamp removed',0x83:'compressor restart delay',0x84:'output on too long',
+  0x85:'bad argument',0x87:'ADC near full scale',0x8A:'hot tank over-temperature',0x8B:'UV lamp did not light',
+  0x8D:'sensor open',0x8F:'sensor short',0x90:'UV fault / cold water abnormally warm'};
+// explanations come from /api/paraminfo (master copy: PIC18F8621_decompiled/parameter_info.json)
+let INFO = {units: {}, params: {}, counters: {}};
+const DUR = {'10ms': 0.01, '100ms': 0.1, s: 1, '10s': 10, min: 60, '10min': 600};
+function fmtDur(sec) {
+  if (sec < 1) return Math.round(sec * 1000) + ' ms';
+  if (sec < 60) return +sec.toFixed(2) + ' s';
+  if (sec < 3600) { const m = Math.floor(Math.round(sec) / 60), s = Math.round(sec) % 60; return m + ' min' + (s ? ` ${s} s` : ''); }
+  if (sec < 86400) { const t = Math.round(sec / 60), h = Math.floor(t / 60), m = t % 60; return h + ' h' + (m ? ` ${m} min` : ''); }
+  return (sec / 86400).toFixed(1) + ' days';
+}
+function fmtValue(unit, v) {
+  if (unit in DUR) return fmtDur(v * DUR[unit]);
+  return ({C: `${v} °C`, dC: `${v} °C`, h: `${v} h`, ml10: `${v * 10} ml`, ml100: `${v / 10} L`, flow: `${v / 10} L/min`,
+    flag: v ? 'on' : 'off', bits: hex(v), hour: `${String(v).padStart(2, '0')} h`, minute: `${String(v).padStart(2, '0')} min`,
+    days: `${v} days`})[unit] ?? String(v);
+}
+function decodeBits(bits, v) {
+  return bits.map(([mask, label]) => {
+    const m = parseInt(mask, 16), shift = Math.log2(m & -m), f = (v & m) >> shift;
+    const state = (m & (m - 1)) === 0 ? (f ? 'on' : 'off') : String(f);
+    return `${mask}  ${state.padStart(3)}  ${label}`;
+  }).join('\n');
+}
+const STATUS = [['VER','Firmware'],['GHT','Hot tank temp'],['GCT','Cold tank temp'],['GDT','Device temp (AN6)'],['COT','Dryer/condenser (AN7)'],
+  ['GHS','Heating system'],['GCS','Cooling system'],['HTS','Heater'],['UVS','UV lamp'],['IVS','Inlet valve'],['CVS','Cold valve'],
+  ['HVS','Hot valve'],['CWC','Child protection']];
+const TABS = {'3.47': [['status','Status'],['params','Parameters'],['counters','Counters'],['controls','Controls'],['console','Console'],
+  ['log','Log'],['settings','Settings'],['firmware','Firmware']],
+  '3.5.13': [['status35','Status'],['controls35','Controls'],['setup35','Setup'],['params35','Parameters'],['pref','Parameters (ref)'],['console','Console'],
+  ['log','Log'],['settings','Settings'],['firmware','Firmware']]};
+
+// ---- v3.5.13 text shell (table at ROM 0xFE1C): name -> [category, accepted argument counts, help]
+const SHELL = {ls: ['read', null, 'List all commands'], temp: ['read', null, 'Temperatures HT, HB, CB (°C, -1 = open)'],
+  input: ['read', null, 'Raw A2D, buttons, inputs, output states'], output: ['read', null, 'List outputs; output=n,v switches output n'],
+  hot: ['hardware', [1, 2], 'Dispense hot (argument required, meaning not decoded)'],
+  cold: ['hardware', [1, 2], 'Dispense cold (argument required, meaning not decoded)'],
+  mix: ['hardware', [1, 2], 'Dispense mixed (argument required, meaning not decoded)'],
+  ex: ['hardware', null, 'Calls two unidentified routines; effect unknown'],
+  par: ['read', [0, 1, 2], 'par reads ALL parameters; par=i reads one; par=i,v writes it (par/settext patch; stock unit = ERROR -123)'],
+  settext: ['eeprom', null, 'Set the idle-screen text (logo-text firmware; stock/par image = ERROR -123)'],
+  ver: ['read', null, 'Version and build date'],
+  get_hwt_type: ['read', null, 'Hot tank type'], get_errors_bitmap: ['read', null, 'Active error numbers'], get_wu: ['read', null, 'Water usage counter'],
+  restore_factory_settings: ['eeprom', null, 'Reset all settings to factory defaults'],
+  set_language: ['eeprom', [1], 'Set display language 0-7 (SYSTEMCONFIG2 bits 0x38)'],
+  set_shipping_mode: ['eeprom', [1], 'Shipping mode on/off (SYSTEMCONFIG4 bit 0), then resets'],
+  set_production_mode: ['eeprom', [1], 'Production mode on/off (SYSTEMCONFIG3 bit 0x02), then resets'],
+  manual_press: ['hardware', [2], 'Simulate key k (0-6) for t (> 0)'], testing_mode: ['hardware', [1], 'Enter (1) / leave (0) testing mode'],
+  reset: ['hardware', null, 'Reset the controller']};
+const OUTPUTS = ['UV_DRIVE', 'FAN', 'COMPRESSOR', 'HEATER', 'COLD_VALVE', 'HOT_VALVE', 'INLET_VALVE', 'LCDBKLT'];
+const VALVES = [5, 4, 6];
+const LANGS = {0: 'English', 4: 'Russian', 5: 'Hebrew'};
+const SHIP = 'Shipping mode = SYSTEMCONFIG4 bit 0: the first-installation flow runs at the next power-up.';
+const PROD = 'Production mode = SYSTEMCONFIG3 bit 0x02: every boot then forces the factory configuration (as the factory jumper does).';
+const STATUS35 = [['ver','Firmware','ver'],['hwt','Hot tank type','get_hwt_type'],['HT','Hot tank top (HT)','temp'],['HB','Hot tank bottom (HB)','temp'],
+  ['CB','Cold tank bottom (CB)','temp'],['A2D','Raw A2D (1023 = open)','input'],['Buttons','Buttons','input'],['UV_POS','UV lamp present (UV_POS)','input'],
+  ['UV_READY','UV lamp lit (UV_READY)','input'],['HEATER_FEEDBACK','Heater feedback','input'],['errors','Active errors','get_errors_bitmap'],['wu','Water usage','get_wu']];
+function splitShell(line) {
+  const i = line.indexOf('=');
+  return i < 0 ? [line, 0] : [line.slice(0, i), line.indexOf(',', i) >= 0 ? 2 : 1];
+}
+function classifyShell(line) {
+  const [w, n] = splitShell(line), c = SHELL[w];
+  if (!c) return [null, 'unknown'];
+  if (w === 'output') return [w, n === 2 ? 'hardware' : 'read'];
+  if (w === 'par') return [w, n === 2 ? 'eeprom' : 'read'];  // par=i reads, par=i,v writes EEPROM
+  return [w, c[0]];
+}
+function shellArgProblem(line) {
+  const [w, n] = splitShell(line), need = (SHELL[w] || [])[1];
+  return need && !need.includes(n) ? `${w} takes ${need.join(' or ')} argument(s); the shell would answer ERROR -127` : '';
+}
+
+// ---- protocol (mirrors pic_console.cpp; the ESP is authoritative)
+function hash(line) {
+  if (line.startsWith('g')) return 0x67;
+  const w = line.split(' ')[0].slice(0, 3);
+  let h = 0;
+  for (let i = 0; i < w.length; i++) h ^= (w.charCodeAt(i) << i) & 0xFF;
+  for (const [raw, mapped, keep] of [[0xD4,0xD3,'R'],[0xFB,0xFA,'S'],[0xF1,0xF0,'G'],[0xA9,0xA7,'S'],[0xE1,0xE0,'G'],[0x8D,0x8C,'G']])
+    if (h === raw && w[0] !== keep) h = mapped;
+  return h;
+}
+const BYHASH = {};
+for (const c of [...READ, ...EEP, ...HW]) BYHASH[hash(c)] ??= c;
+function classify(line) {
+  if (FW === '3.5.13') return classifyShell(line);
+  const name = BYHASH[hash(line)];
+  return [name || null, !name ? 'unknown' : EEP.includes(name) ? 'eeprom' : HW.includes(name) ? 'hardware' : 'read'];
+}
+const u8 = v => v < 0 ? v & 0xFF : v;
+const hex = v => '0x' + v.toString(16).toUpperCase().padStart(2, '0');
+const fault = v => u8(v) === 0 ? 'OK' : `${hex(u8(v))} ${FAULTS[u8(v)] || 'fault'}`;
+
+// ---- transport: one command at a time
+let chain = Promise.resolve();
+async function post(url, data = {}) {
+  const r = await fetch(url, {method: 'POST', body: new URLSearchParams(data)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function send(line, confirm = '') {
+  const p = chain.then(() => post('/api/cmd', {line, confirm}))
+    .catch(e => ({line, status: 'ERR', lines: [e.message], blocked: true}))
+    .then(r => { echo(r); return r; });
+  chain = p;
+  return p;
+}
+// Ask before EEPROM writes / hardware actions; resolves to the reply (or a 'cancelled' reply).
+function guard(line, why = '') {
+  const [name, cat] = classify(line);
+  const cancelled = Promise.resolve({line, status: 'ERR', lines: ['cancelled'], blocked: true});
+  if (line.length > maxLen()) { toast(`'${line}' is ${line.length} chars; the console accepts ${maxLen()}`); return cancelled; }
+  if (FW === '3.5.13') {  // exact names: unknown words / wrong argument counts run nothing (ERROR -123 / -127)
+    if (cat === 'read' || cat === 'unknown' || shellArgProblem(line)) return send(line);
+    if (name === 'restore_factory_settings') {
+      const t = prompt(`${line} resets ALL settings to factory defaults (EEPROM). Never tested on the unit.\n${why}\n\nType ${name} to confirm:`);
+      return t === name ? send(line, name) : cancelled;
+    }
+    const what = cat === 'eeprom' ? 'writes EEPROM' : 'actuates hardware / changes the operating mode';
+    const resets = ['set_shipping_mode', 'set_production_mode', 'reset'].includes(name) ? '\nThe controller resets afterwards.' : '';
+    return confirm(`'${line}' ${what}.\n${SHELL[name][2]}.${resets}\nNot yet tested on the unit.${why ? '\n\n' + why : ''}\n\nSend it?`)
+      ? send(line, '1') : cancelled;
+  }
+  if (cat === 'read' || name === 'STP') return send(line);
+  const note = UNTESTED.includes(name) ? '\nThis command is reconstructed and has NOT been verified on the unit.' : '';
+  if (BULK.includes(name)) {
+    const t = prompt(`${line} is BULK-DESTRUCTIVE.${note}\n${why}\n\nType ${name} to confirm:`);
+    return t === name ? send(line, name) : cancelled;
+  }
+  const what = cat === 'unknown' ? `does not hash to a known command (hash ${hex(hash(line))}); the unit will most likely reply 0x81`
+    : cat === 'eeprom' ? 'writes EEPROM' : 'actuates hardware';
+  const alias = name && !line.startsWith(name) ? ` (hashes to ${name})` : '';
+  return confirm(`'${line}'${alias} ${what}.${note}${why ? '\n\n' + why : ''}\n\nSend it?`) ? send(line, '1') : cancelled;
+}
+
+// ---- UI helpers
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 4000); }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function dl(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name; a.click(); }
+function echo(r) {
+  const o = $('#cout'), t = new Date().toLocaleTimeString();
+  o.insertAdjacentHTML('beforeend', `<span class="tx">[${t}] &gt;&gt;&gt; ${esc(r.line)}</span>\n` +
+    r.lines.map(l => `    <span class="${r.status === 'OK' ? '' : 'bad'}">${esc(l)}</span>\n`).join('') +
+    `    <span class="${r.status === 'OK' ? 'ok' : 'bad'}">${r.status}</span>\n`);
+  o.scrollTop = o.scrollHeight;
+  if (r.blocked && r.lines[0] !== 'cancelled') toast(r.lines[0]);
+}
+function showTab(id) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === id));
+  document.querySelectorAll('main section').forEach(s => s.classList.toggle('on', s.id === 't-' + id));
+  if (id === 'log') loadLog();
+  if (id === 'settings') loadInfo(true);
+  try { localStorage.setItem('tab', id); } catch (e) {}
+}
+
+function stop() {  // never blocked by the ESP; v3.5.13 has no stop command, so close the valves
+  if (FW === '3.5.13') { for (const n of VALVES) send(`output=${n},0`); send('output').then(showOutputs); }
+  else send('STP');
+}
+
+// ---- status
+function refreshStatus() {
+  if (FW === '3.5.13') return refreshStatus35();
+  send('ST').then(r => {
+    $('#st').innerHTML = r.lines.map(l => {
+      const m = l.match(/^(.*)\s(-?\d+)$/);
+      if (!m) return `<tr><td class="l" colspan="3">${esc(l)}</td></tr>`;
+      const v = +m[2];
+      return `<tr><td class="l">${esc(m[1])}</td><td>${v}</td><td class="l ${v ? 'bad' : ''}">${esc(fault(v))}</td></tr>`;
+    }).join('');
+  });
+  for (const [c] of STATUS) send(c).then(r => {
+    let t = r.lines.join(' ');
+    if (r.status === 'OK' && ['GHT','GCT','GDT','COT'].includes(c))
+      t = r.lines.map(v => v.trim() === '-1' ? 'open sensor (-1)' : v + ' °C').join(' / ');
+    const el = $('#r-' + c);
+    el.textContent = r.status === 'OK' ? t : 'error: ' + t;
+    el.className = r.status === 'OK' ? '' : 'bad';
+  });
+}
+let autoH = null;
+function autoToggle(el = $('#auto')) {
+  clearInterval(autoH);
+  const sec = el.id === 'auto' ? $('#autoSec') : $('#autoSec35');
+  if (el.checked) { refreshStatus(); autoH = setInterval(refreshStatus, Math.max(5, +sec.value) * 1000); }
+}
+
+// ---- v3.5.13 status / controls
+const kv = lines => Object.fromEntries([...lines.join(' ').matchAll(/(\w+)=\s*(-?\d+)/g)].map(m => [m[1], +m[2]]));
+function set35(k, text, bad = false) { const el = $('#s-' + k); if (el) { el.textContent = text; el.className = bad ? 'bad' : ''; } }
+function read35(cmd) {
+  return send(cmd).then(r => {
+    const keys = STATUS35.filter(s => s[2] === cmd).map(s => s[0]);
+    if (r.status !== 'OK') return keys.forEach(k => set35(k, 'error: ' + r.lines.join(' '), true));
+    const t = r.lines.map(l => l.trim()).join(' ');
+    if (cmd === 'ver') set35('ver', t);
+    else if (cmd === 'get_hwt_type') set35('hwt', t.replace('Hot Tank ', ''));
+    else if (cmd === 'temp') { const v = kv(r.lines); keys.forEach(k => set35(k, v[k] === undefined ? '—' : v[k] === -1 ? 'open sensor (-1)' : `${v[k]} °C`, v[k] === -1)); }
+    else if (cmd === 'input') {
+      const v = kv(r.lines);
+      for (const l of r.lines) {
+        if (l.startsWith('A2D:')) set35('A2D', l.slice(4).trim());
+        if (l.startsWith('Buttons:')) set35('Buttons', l.slice(8).trim() + '   (raw)');
+      }
+      if ('UV_POS' in v) set35('UV_POS', v.UV_POS + (v.UV_POS ? '  (lamp present)' : '  (no lamp)'));
+      if ('UV_READY' in v) set35('UV_READY', v.UV_READY + (v.UV_READY ? '  (lit)' : '  (not lit)'));
+      if ('HEATER_FEEDBACK' in v) set35('HEATER_FEEDBACK', String(v.HEATER_FEEDBACK));
+      showOutputs(r);
+    } else if (cmd === 'get_errors_bitmap') { const n = t.match(/\d+/g) || []; set35('errors', n.length ? n.join(', ') : 'none', n.length > 0); }
+    else if (cmd === 'get_wu') { const m = t.match(/(\d+)\s*$/); set35('wu', m ? (+m[1]).toLocaleString() + '   (unit not decoded)' : t); }
+  });
+}
+function refreshStatus35() { for (const c of ['ver', 'get_hwt_type', 'temp', 'input', 'get_errors_bitmap', 'get_wu']) read35(c); }
+let outs = OUTPUTS.map(() => null);
+function showOutputs(r) {
+  if (r && r.status === 'OK')
+    for (const l of r.lines) { const m = l.match(/^(?:Outputs:)?\s*(\d+),\s*(\w+),\s*(\d+)\s*$/); if (m && +m[1] < 8) outs[+m[1]] = +m[3]; }
+  const st = v => v === null ? '?' : v ? '<b class="ok">ON</b>' : 'off';
+  $('#outs35').innerHTML = OUTPUTS.map((n, i) => `<tr><td>${i}</td><td class="l">${n}</td><td class="l">${st(outs[i])}</td></tr>`).join('');
+  $('#outsCtl').innerHTML = OUTPUTS.map((n, i) => `<tr><td>${i}</td><td class="l">${n}</td><td class="l">${st(outs[i])}</td>` +
+    `<td><button onclick="switchOut(${i},1)">ON</button> <button onclick="switchOut(${i},0)">OFF</button></td></tr>`).join('');
+}
+function switchOut(n, v) {
+  const p = v ? guard(`output=${n},${v}`, `Switches ${OUTPUTS[n]} ON.`) : send(`output=${n},0`, '1');
+  p.then(r => { if (!r.blocked) send('output').then(showOutputs); });
+}
+function dispense(cmd) {
+  const a = $('#darg').value.trim();
+  if (!/^-?\d+$/.test(a)) return toast('Enter an integer argument (it is required)');
+  guard(`${cmd}=${a}`, 'Use STOP to close the valves.');
+}
+function manualPress() {
+  const k = +$('#mkey').value, t = +$('#mtime').value;
+  if (!(k >= 0 && k <= 6 && Number.isInteger(k)) || !(t > 0 && Number.isInteger(t))) return toast('Key 0-6, time a whole number > 0');
+  guard(`manual_press=${k},${t}`);
+}
+
+// ---- v3.5.13 parameter reference: v3.47 table (baseline GPL) + parameter_info.json 'versions' changes
+let refRows = [], oldRom = {};
+function fillRef() {
+  const base = Object.values(baseP).sort((a, b) => a.i - b.i);
+  oldRom = Object.fromEntries(base.map(p => [p.name, p]));
+  const rows = base.map(p => ({i: p.i, name: p.name, default: p.default, min: p.min, max: p.max}));
+  for (const [name, [i, d, mn, mx]] of Object.entries(((INFO.versions || {})['3.5.13'] || {}).rom || {})) {
+    let r = rows.find(r => r.name === name);
+    if (!r) rows.push(r = {i, name});
+    Object.assign(r, {default: d, min: mn, max: mx});
+  }
+  refRows = rows.sort((a, b) => a.i - b.i);
+  $('#rtab').innerHTML = refRows.map(r => {
+    const o = oldRom[r.name], pi = INFO.params[r.name] || {};
+    const same = o && o.default === r.default && o.min === r.min && o.max === r.max;
+    return `<tr data-i="${r.i}" class="${same ? '' : o ? 'chg' : 'new'}" title="${esc(pi.desc || '')}"><td>${r.i}</td><td class="l">${esc(r.name)}</td>` +
+      `<td class="l">${esc(pi.group || '')}</td><td>${r.default}</td><td class="l">${esc(fmtValue(pi.unit, r.default))}</td><td>${r.min}</td><td>${r.max}</td>` +
+      `<td class="l">${same ? '' : o ? `${o.default} / ${o.min} / ${o.max}` : 'new'}</td></tr>`;
+  }).join('');
+  fillParams35();
+}
+function selRef(i) {
+  const r = refRows.find(r => r.i === i); if (!r) return;
+  document.querySelectorAll('#rtab tr').forEach(tr => tr.classList.toggle('sel', +tr.dataset.i === i));
+  const pi = INFO.params[r.name] || {}, f = v => fmtValue(pi.unit, v);
+  const note = ((((INFO.versions || {})['3.5.13'] || {}).notes) || {})[r.name];
+  $('#rdesc').innerHTML = !pi.desc ? 'No description available.' :
+    `<b>${esc(r.name)}</b> · ${esc(pi.group)} · unit: ${esc(INFO.units[pi.unit] || pi.unit)}\n${esc(pi.desc)}\n` +
+    `Default <b>${esc(f(r.default))}</b> · allowed ${esc(f(r.min))} … ${esc(f(r.max))}` + (note ? '\n' + esc(note) : '') +
+    (pi.bits ? `\nBits at the default value (v3.47 meanings):\n<span class="bits">${esc(decodeBits(pi.bits, r.default))}</span>` : '');
+}
+
+// ---- baseline
+let baseP = {}, baseC = {};
+const parseGPL = lines => lines.map(l => l.split(',')).filter(p => p.length === 6 && /^\d+$/.test(p[0]))
+  .map(([i, name, mn, mx, v, d]) => ({i: +i, name, min: u8(+mn), max: u8(+mx), value: u8(+v), default: u8(+d)}));
+const parseGCL = lines => lines.map(l => l.split(',')).filter(p => p.length === 3 && /^\d+$/.test(p[0]))
+  .map(([i, name, v]) => ({i: +i, name, value: +v}));
+async function loadBaseline() {
+  const b = await fetch('/api/baseline').then(r => r.json());
+  baseP = Object.fromEntries(parseGPL(b.gpl.split(/\r?\n/)).map(p => [p.i, p]));
+  baseC = Object.fromEntries(parseGCL(b.gcl.split(/\r?\n/)).map(c => [c.i, c]));
+  fillRef();
+}
+async function saveBaseline(which) {
+  const rows = which === 'gpl' ? params : counters;
+  if (!rows.length) return toast('Read the table first');
+  if (!confirm(`Replace the stored ${which.toUpperCase()} baseline with the values currently shown?`)) return;
+  const text = which === 'gpl'
+    ? [rows.length, ...rows.map(p => [p.i, p.name, p.min, p.max, p.value, p.default].join(','))].join('\n')
+    : [rows.length, ...rows.map(c => [c.i, c.name, c.value].join(','))].join('\n');
+  await post('/api/baseline', {[which]: text});
+  await loadBaseline();
+  which === 'gpl' ? fillParams() : fillCounters();
+  toast('Baseline saved on the ESP');
+}
+async function runBatch(cmds, what, after) {
+  if (!cmds.length) return toast(`All ${what} already match the baseline`);
+  const unt = [...new Set(cmds.map(c => classify(c)[0]).filter(n => UNTESTED.includes(n)))];
+  if (!confirm(`${cmds.length} EEPROM write(s) to restore ${what}:\n\n${cmds.slice(0, 25).join('\n')}` +
+    (cmds.length > 25 ? `\n… and ${cmds.length - 25} more` : '') +
+    (unt.length ? `\n\nIncludes commands not yet verified on the unit: ${unt.join(', ')}` : '') + '\n\nSend them?')) return;
+  for (const c of cmds) { const r = await send(c, '1'); if (r.blocked) break; }
+  after();
+}
+
+// ---- parameters
+let params = [], pSel = null;
+function readParams() {
+  return send('GPL').then(r => {
+    const rows = parseGPL(r.lines);
+    if (!rows.length) return toast('Could not parse GPL reply');
+    params = rows; fillParams();
+  });
+}
+const pinfo = p => INFO.params[p.name] || {};
+function fillParams() {
+  const q = $('#pfilter').value.trim().toLowerCase(), grp = $('#pgroup').value;
+  $('#ptab').innerHTML = params.filter(p => {
+    const pi = pinfo(p);
+    return (!grp || pi.group === grp) && (!q || `${p.name} ${pi.group} ${pi.desc}`.toLowerCase().includes(q));
+  }).map(p => {
+    const b = baseP[p.i], pi = pinfo(p);
+    const cls = b && b.value !== p.value ? 'drift' : p.value !== p.default ? 'chg' : '';
+    return `<tr data-i="${p.i}" class="${cls}${p.i === pSel ? ' sel' : ''}" title="${esc(pi.desc || '')}"><td>${p.i}</td>` +
+      `<td class="l">${esc(p.name)}</td><td class="l">${esc(pi.group || '')}</td><td>${p.value}</td><td class="l">${esc(fmtValue(pi.unit, p.value))}</td>` +
+      `<td>${p.min}</td><td>${p.max}</td><td>${p.default}</td><td>${b ? b.value : ''}</td></tr>`;
+  }).join('');
+  if (pSel !== null) selParam(pSel);
+}
+function selParam(i) {
+  pSel = i; const p = params.find(p => p.i === i); if (!p) return;
+  document.querySelectorAll('#ptab tr').forEach(tr => tr.classList.toggle('sel', +tr.dataset.i === i));
+  $('#psel').textContent = `#${p.i} ${p.name}`;
+  $('#pv').value = p.value; $('#pmin').value = p.min; $('#pmax').value = p.max;
+  const pi = pinfo(p), f = v => fmtValue(pi.unit, v);
+  $('#pdesc').innerHTML = !pi.desc ? 'No description available.' :
+    `<b>${esc(p.name)}</b> · ${esc(pi.group)} · unit: ${esc(INFO.units[pi.unit] || pi.unit)}\n${esc(pi.desc)}\n` +
+    `Now <b>${esc(f(p.value))}</b> · default ${esc(f(p.default))} · allowed ${esc(f(p.min))} … ${esc(f(p.max))}` +
+    (pi.bits ? `\n<span class="bits">${esc(decodeBits(pi.bits, p.value))}</span>` : '');
+}
+const curParam = () => params.find(p => p.i === pSel) || (toast('Select a parameter first (Read all)'), null);
+function setParam(key, cmd) {
+  const p = curParam(); if (!p) return;
+  const v = +$({value: '#pv', min: '#pmin', max: '#pmax'}[key]).value;
+  if (!Number.isInteger(v) || v < 0 || v > 255) return toast('Parameters are bytes: 0..255');
+  let why = `${p.name}: ${key} ${p[key]} → ${v}`;
+  if (key === 'value' && (v < p.min || v > p.max)) why += `\nOutside ${p.min}..${p.max}: the firmware should reject it (0x85).`;
+  guard(`${cmd} ${p.i},${v}`, why).then(r => { if (!r.blocked) readParams(); });
+}
+function getParam() { const p = curParam(); if (p) send(`GP ${p.i}`).then(r => toast(`GP ${p.i} (${p.name}) = ${r.lines.join(' ')}`)); }
+function resetParam() { const p = curParam(); if (p) guard(`RP ${p.i}`, `${p.name}: ${p.value} → default ${p.default}`).then(r => { if (!r.blocked) readParams(); }); }
+function restoreParams() {
+  if (!params.length) return toast('Read all parameters (GPL) first');
+  const cmds = [];
+  for (const p of params) {
+    const b = baseP[p.i]; if (!b) continue;
+    if (b.min !== p.min) cmds.push(`SMN ${p.i},${b.min}`);
+    if (b.max !== p.max) cmds.push(`SMX ${p.i},${b.max}`);
+    if (b.value !== p.value) cmds.push(`SP ${p.i},${b.value}`);
+  }
+  runBatch(cmds, 'parameters', readParams);
+}
+
+// ---- v3.5.13 editable parameters via the `par` patch (ROM table from the reference, live values from par=i)
+let peVal = {}, peSel = null;
+function fillParams35() {
+  if (!$('#petab')) return;
+  const qf = ($('#pf35') && $('#pf35').value.trim().toLowerCase()) || '';
+  $('#petab').innerHTML = refRows.filter(r => {
+    const pi = INFO.params[r.name] || {};
+    return !qf || `${r.name} ${pi.group || ''} ${pi.desc || ''}`.toLowerCase().includes(qf);
+  }).map(r => {
+    const pi = INFO.params[r.name] || {}, v = peVal[r.i], has = v !== undefined;
+    const cls = (has && v !== r.default ? 'chg' : '') + (r.i === peSel ? ' sel' : '');
+    return `<tr data-i="${r.i}" class="${cls}" title="${esc(pi.desc || '')}"><td>${r.i}</td><td class="l">${esc(r.name)}</td>` +
+      `<td class="l">${esc(pi.group || '')}</td><td>${has ? v : '\u2014'}</td><td class="l">${has ? esc(fmtValue(pi.unit, v)) : ''}</td>` +
+      `<td>${r.min}</td><td>${r.max}</td><td>${r.default}</td></tr>`;
+  }).join('');
+  if (peSel !== null) selParam35(peSel);
+}
+function selParam35(i) {
+  peSel = i; const r = refRows.find(r => r.i === i); if (!r) return;
+  document.querySelectorAll('#petab tr').forEach(tr => tr.classList.toggle('sel', +tr.dataset.i === i));
+  $('#pesel').textContent = `#${r.i} ${r.name}`;
+  const v = peVal[i]; if (v !== undefined) $('#pev').value = v;
+  const pi = INFO.params[r.name] || {}, f = x => fmtValue(pi.unit, x);
+  $('#pedesc').innerHTML = !pi.desc ? 'No description available.' :
+    `<b>${esc(r.name)}</b> · ${esc(pi.group)} · unit: ${esc(INFO.units[pi.unit] || pi.unit)}\n${esc(pi.desc)}\n` +
+    `${v !== undefined ? `Now <b>${esc(f(v))}</b> · ` : ''}default ${esc(f(r.default))} · allowed ${esc(f(r.min))} … ${esc(f(r.max))}` +
+    (pi.bits && v !== undefined ? `\n<span class="bits">${esc(decodeBits(pi.bits, v))}</span>` : '');
+}
+const curPar35 = () => refRows.find(r => r.i === peSel) || (toast('Select a parameter first'), null);
+function peGot(i, r) {
+  if (r.status !== 'OK' || !r.lines.length) return;
+  const m = r.lines.join(' ').match(/-?\d+/);
+  if (m) { peVal[i] = +m[0] & 0xFF; fillParams35(); }
+}
+function readParams35() {
+  if (!refRows.length) return toast('Parameter table not loaded yet');
+  send('par').then(r => {              // one-shot bulk read (par-settext firmware)
+    if (r.status === 'OK' && r.lines.length >= 70) {
+      r.lines.forEach((line, i) => { const m = line.match(/-?\d+/); if (m && i < 77) peVal[i] = +m[0] & 0xFF; });
+      fillParams35();
+    } else {                            // fallback: per-parameter (older firmware)
+      for (const r2 of refRows) send(`par=${r2.i}`).then(rep => peGot(r2.i, rep));
+    }
+  });
+}
+function getParam35() { const r = curPar35(); if (r) send(`par=${r.i}`).then(rep => peGot(r.i, rep)); }
+function setParam35() {
+  const r = curPar35(); if (!r) return;
+  const v = +$('#pev').value;
+  if (!Number.isInteger(v) || v < 0 || v > 255) return toast('Parameters are bytes: 0..255');
+  const cur = peVal[r.i] ?? r.default;
+  let why = `${r.name}: ${cur} \u2192 ${v}`;
+  if (v < r.min || v > r.max) why += `\n\u26a0 Outside the usual range ${r.min}..${r.max}; this firmware does not range-check, so it is written as-is.`;
+  guard(`par=${r.i},${v}`, why).then(rp => { if (!rp.blocked) send(`par=${r.i}`).then(x => peGot(r.i, x)); });
+}
+function resetParam35() {
+  const r = curPar35(); if (!r) return;
+  const cur = peVal[r.i] ?? '?';
+  guard(`par=${r.i},${r.default}`, `${r.name}: ${cur} \u2192 default ${r.default}`).then(rp => { if (!rp.blocked) send(`par=${r.i}`).then(x => peGot(r.i, x)); });
+}
+function setLogoText() {
+  const l1 = $('#logotext').value.toUpperCase();    // the LCD font is uppercase-only
+  const l2 = $('#logotext2').value.toUpperCase();
+  const t = l2.length ? (l1 + '|' + l2) : l1;       // '|' = row break; firmware draws line 2 below
+  if (t.length > 33) return toast('Lines too long');
+  const show = t.length ? '"' + t.replace('|', ' / ') + '"' : '(blank)';
+  guard('settext=' + t, 'Idle-screen text \u2192 ' + show);
+}
+function clearLogoText() { $('#logotext').value=''; $('#logotext2').value=''; guard('settext=', 'Clears the idle-screen text (blank).'); }
+function csv35() {
+  if (!refRows.length) return toast('Nothing to export');
+  csv(refRows.map(r => ({i: r.i, name: r.name, group: (INFO.params[r.name] || {}).group || '',
+    value: peVal[r.i] ?? '', min: r.min, max: r.max, default: r.default})), 'params_3.5.13');
+}
+
+// ---- counters
+let counters = [], cSel = null;
+function readCounters() {
+  return send('GCL').then(r => {
+    const rows = parseGCL(r.lines);
+    if (!rows.length) return toast('Could not parse GCL reply');
+    counters = rows; fillCounters();
+  });
+}
+function cdesc(c) {
+  const ci = INFO.counters[c.name] || {};
+  const real = ci.unit && ci.unit !== 'count' ? `[${fmtValue(ci.unit, c.value)}]  ` : '';
+  return real + (ci.desc || '');
+}
+function fillCounters() {
+  $('#ctab').innerHTML = counters.map(c => {
+    const b = baseC[c.i];
+    return `<tr data-i="${c.i}" class="${b && b.value !== c.value ? 'drift' : ''}${c.i === cSel ? ' sel' : ''}"><td>${c.i}</td>` +
+      `<td class="l">${esc(c.name)}</td><td>${c.value.toLocaleString()}</td><td>${b ? b.value.toLocaleString() : ''}</td><td class="wrap">${esc(cdesc(c))}</td></tr>`;
+  }).join('');
+}
+function selCounter(i) {
+  cSel = i; const c = counters.find(c => c.i === i); if (!c) return;
+  document.querySelectorAll('#ctab tr').forEach(tr => tr.classList.toggle('sel', +tr.dataset.i === i));
+  $('#csel').textContent = `#${c.i} ${c.name}`; $('#cv').value = c.value;
+  const ci = INFO.counters[c.name] || {};
+  $('#cdesc').innerHTML = `<b>${esc(c.name)}</b> — ${esc(ci.desc || 'no description')}\n` +
+    `Now ${c.value.toLocaleString()} ${esc(INFO.units[ci.unit] || '')} = <b>${esc(fmtValue(ci.unit, c.value))}</b>`;
+}
+const curCounter = () => counters.find(c => c.i === cSel) || (toast('Select a counter first (Read all)'), null);
+// atol skips leading spaces, so the space is dropped when the line would exceed 11 chars (untested)
+const gLine = (i, v) => { const l = `g${String(i).padStart(2, '0')} ${v}`; return l.length <= 11 ? l : l.replace(' ', ''); };
+function getCounter() { const c = curCounter(); if (c) send(`GC ${c.i}`).then(r => toast(`GC ${c.i} (${c.name}) = ${r.lines.join(' ')}`)); }
+function clearCounter() { const c = curCounter(); if (c) guard(`RC ${c.i}`, `${c.name}: ${c.value.toLocaleString()} → 0`).then(r => { if (!r.blocked) readCounters(); }); }
+function setCounter() {
+  const c = curCounter(); if (!c) return;
+  const v = +$('#cv').value;
+  if (!Number.isInteger(v) || v < 0 || v > 0xFFFFFFFF) return toast('Counters are 32-bit unsigned');
+  guard(gLine(c.i, v), `${c.name}: ${c.value.toLocaleString()} → ${v.toLocaleString()}`).then(r => { if (!r.blocked) readCounters(); });
+}
+function restoreCounters() {
+  if (!counters.length) return toast('Read all counters (GCL) first');
+  runBatch(counters.filter(c => baseC[c.i] && baseC[c.i].value !== c.value).map(c => gLine(c.i, baseC[c.i].value)), 'counters', readCounters);
+}
+
+function csv(rows, what) {
+  if (!rows.length) return toast(`Read the ${what} first`);
+  const keys = Object.keys(rows[0]);
+  dl(`${what}_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.csv`,
+     [keys.join(','), ...rows.map(r => keys.map(k => r[k]).join(','))].join('\n'), 'text/csv');
+}
+
+// ---- console
+function consoleSend() {
+  const l = FW === '3.5.13' ? $('#cin').value.trim() : $('#cin').value.trimEnd(); if (!l) return;
+  guard(l).then(r => { if (r.lines[0] !== 'cancelled') $('#cin').value = '', preview(); });
+}
+function preview() {
+  const l = $('#cin').value, [name, cat] = classify(l);
+  if (FW === '3.5.13') {
+    const pr = shellArgProblem(l.trim());
+    $('#cinfo').textContent = !l ? '' : `${l.length}/29 chars · ` + (name ? `${name} (${cat}) — ${SHELL[name][2]}` :
+      'not a command: the shell will answer ERROR -123 (names are case-sensitive)') + (pr ? ' · ' + pr : '');
+    $('#cinfo').className = l && (cat === 'eeprom' || cat === 'hardware' || pr) ? 'bad' : 'mut';
+    return;
+  }
+  $('#cinfo').textContent = l ? `${l.length}/11 chars · hash ${hex(hash(l))} → ${name || '?'} (${cat})` : '';
+  $('#cinfo').className = cat !== 'read' && l ? 'bad' : 'mut';
+}
+
+// ---- log / settings / firmware
+const loadLog = () => fetch('/api/log').then(r => r.text()).then(t => { const p = $('#log'); p.textContent = t; p.scrollTop = p.scrollHeight; });
+let info = null;
+async function loadInfo(fillForm) {
+  try { info = await fetch('/api/info').then(r => r.json()); } catch (e) { $('#conn').textContent = 'ESP unreachable'; return; }
+  $('#conn').textContent = info.sta.connected ? `${info.host}.local · ${info.sta.ip} · ${info.sta.rssi} dBm` : `AP ${info.ap.ssid} · ${info.ap.ip}`;
+  $('#apname').textContent = info.ap.ssid;
+  const up = info.uptime, rows = {Firmware: `bridge ${info.fw} on ${info.chip}`, Time: info.time,
+    Uptime: `${Math.floor(up / 86400)}d ${Math.floor(up / 3600) % 24}h ${Math.floor(up / 60) % 60}m`, 'Free heap': info.heap.toLocaleString() + ' B',
+    'Home Wi-Fi': info.sta.connected ? `${info.sta.ssid} · ${info.sta.ip} · ${info.sta.rssi} dBm` : (info.sta.ssid ? `${info.sta.ssid} (not connected)` : 'not set'),
+    'Access point': info.ap.on ? `${info.ap.ssid} · ${info.ap.ip} · ${info.ap.clients} client(s)` : 'off',
+    'PIC UART': `RX GPIO${info.pins.rx} · TX GPIO${info.pins.tx} · ${info.pic.baud} 8N1`,
+    'PIC firmware': `v${info.pic.fw} (${info.pic.mode === 'auto' ? (info.pic.detected ? 'detected: ' + info.pic.ver : 'auto: no reply, using 9600') : 'set manually'})`};
+  $('#info').innerHTML = Object.entries(rows).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  if (fillForm) {
+    $('#ssid').value = info.sta.ssid; $('#host').value = info.host; $('#webUser').value = info.settings.webUser; $('#tz').value = info.settings.tz;
+    for (const k of ['apAlways', 'allowEeprom', 'allowHw']) $('#' + k).checked = info.settings[k];
+    $('#picMode').value = info.pic.mode;
+  }
+  setFw(info.pic.fw);
+}
+// show the tabs for the PIC firmware the ESP is talking to
+function setFw(fw) {
+  const changed = fw !== FW || !$('#tabs').innerHTML;
+  FW = fw;
+  $('#picfw').textContent = `PIC v${fw}`;
+  $('#stopbtn').textContent = fw === '3.5.13' ? 'STOP: close valves' : 'STOP (STP)';
+  $('#cin').placeholder = fw === '3.5.13' ? 'e.g. temp  or  output=1,0' : 'e.g. GP 21';
+  if (!changed) return;
+  $('#tabs').innerHTML = TABS[fw].map(([id, t]) => `<button data-t="${id}">${t}</button>`).join('');
+  let tab = 'status'; try { tab = localStorage.getItem('tab') || tab; } catch (e) {}
+  showTab(TABS[fw].some(t => t[0] === tab) ? tab : TABS[fw][0][0]);
+  preview();
+  refreshStatus();
+}
+async function setPicFw() {
+  toast('Applying… (auto-detect takes a few seconds)');
+  try {
+    const r = await post('/api/picfw', {fw: $('#picMode').value});
+    toast(r.mode === 'auto' ? (r.detected ? `Detected v${r.fw}: ${r.ver}` : 'No reply at 9600 or 38400; staying at 9600') : `Set to v${r.fw}`);
+    loadInfo(true);
+  } catch (e) { toast(e.message); }
+}
+async function scan() {
+  toast('Scanning…');
+  const nets = await fetch('/api/scan').then(r => r.json());
+  $('#ssids').innerHTML = nets.map(n => `<option value="${esc(n.ssid)}">${n.rssi} dBm${n.open ? ' open' : ''}</option>`).join('');
+  toast(`${nets.length} networks found; pick one in the SSID field`);
+}
+async function saveSettings() {
+  const d = {ssid: $('#ssid').value, host: $('#host').value, webUser: $('#webUser').value, tz: $('#tz').value};
+  for (const k of ['wpass', 'webPass', 'apPass', 'otaPass']) if ($('#' + k).value) d[k] = $('#' + k).value;
+  for (const k of ['apAlways', 'allowEeprom', 'allowHw']) d[k] = $('#' + k).checked ? '1' : '0';
+  if (d.allowHw === '1' && !info.settings.allowHw && !confirm('Allow hardware actions (dispense hot/cold, modes, reset) over the network?')) return;
+  try {
+    const r = await post('/api/settings', d);
+    for (const k of ['wpass', 'webPass', 'apPass', 'otaPass']) $('#' + k).value = '';
+    toast(r.rebootSuggested ? 'Saved. Reboot to apply the Wi-Fi change.' : 'Saved');
+    loadInfo(true);
+  } catch (e) { toast(e.message); }
+}
+function reboot() { if (confirm('Reboot the ESP? (The dispenser is not affected.)')) post('/api/reboot').then(() => toast('Rebooting…')); }
+function upload() {
+  const f = $('#fw').files[0]; if (!f) return toast('Choose a .bin file');
+  if (!confirm(`Flash ${f.name} (${f.size.toLocaleString()} bytes) to the ESP and reboot?`)) return;
+  const x = new XMLHttpRequest(), fd = new FormData();
+  fd.append('firmware', f, f.name);
+  x.upload.onprogress = e => $('#fwp').value = e.loaded / e.total * 100;
+  x.onload = () => $('#fws').textContent = x.status === 200 ? 'Done; rebooting. Reload in ~10 s.' : 'Failed: ' + x.responseText;
+  x.onerror = () => $('#fws').textContent = 'Upload failed';
+  x.open('POST', '/update'); x.send(fd);
+}
+
+// ---- build
+$('#tabs').onclick = e => e.target.dataset.t && showTab(e.target.dataset.t);
+$('#readings35').innerHTML = STATUS35.map(([k, l, c]) => `<dt>${l} <span class="mut">${c}</span></dt><dd id="s-${k}">—</dd>`).join('');
+$('#lang').innerHTML = [0, 1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}"${n === 5 ? ' selected' : ''}>${n} ${LANGS[n] || '(not decoded)'}</option>`).join('');
+$('#rtab').onclick = e => { const tr = e.target.closest('tr'); if (tr) selRef(+tr.dataset.i); };
+showOutputs();
+$('#readings').innerHTML = STATUS.map(([c, l]) => `<dt>${l} <span class="mut">${c}</span></dt><dd id="r-${c}">—</dd>`).join('');
+$('#ctl').innerHTML = [['Dispense', [['DCW','Dispense cold'],['DHW','Dispense hot'],['STP','Stop']]],
+  ['Child protection', [['CP1','ON'],['CP0','OFF'],['CWC','Read state']]],
+  ['Extra-hot', [['EH1','ON'],['EH0','OFF']]],
+  ['Mode', [['NM','Normal (wake)'],['SM','Sleep'],['PD','Power down (standby)'],['RS','Reset controller']]]]
+  .map(([t, items]) => `<div class="card"><h2>${t}</h2><div class="row">` +
+    items.map(([c, l]) => `<button class="${c === 'STP' ? 'stop' : ''}" onclick="guard('${c}')">${l} [${c}]</button>`).join('') + '</div></div>').join('');
+$('#ptab').onclick = e => { const tr = e.target.closest('tr'); if (tr) selParam(+tr.dataset.i); };
+$('#petab').onclick = e => { const tr = e.target.closest('tr'); if (tr) selParam35(+tr.dataset.i); };
+$('#ctab').onclick = e => { const tr = e.target.closest('tr'); if (tr) selCounter(+tr.dataset.i); };
+$('#cin').addEventListener('input', preview);
+$('#cin').addEventListener('keydown', e => { if (e.key === 'Enter') consoleSend(); });
+loadInfo(true).then(() => { if (!$('#tabs').innerHTML) setFw(FW); });  // setFw() builds the tabs and refreshes status
+setInterval(() => loadInfo(false), 15000);
+loadBaseline().catch(() => toast('Could not load baseline'));
+fetch('/api/paraminfo').then(r => r.json()).then(j => {
+  INFO = j;
+  const groups = [...new Set(Object.values(j.params).map(p => p.group))].sort();
+  $('#pgroup').innerHTML = '<option value="">All groups</option>' + groups.map(g => `<option>${esc(g)}</option>`).join('');
+  fillParams(); fillCounters(); fillRef();
+}).catch(() => toast('Could not load parameter descriptions'));
+</script>
+</body>
+</html>
